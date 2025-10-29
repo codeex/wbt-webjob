@@ -1,0 +1,435 @@
+@model WbtWebJob.Models.CustomJobWizardViewModel
+
+@{
+    ViewData["Title"] = "创建定制任务 - 向导模式";
+}
+
+<style>
+    .wizard-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        position: relative;
+    }
+
+    .wizard-steps::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #e0e0e0;
+        z-index: 0;
+    }
+
+    .wizard-step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .wizard-step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #e0e0e0;
+        color: #666;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+        background: #0d6efd;
+        color: white;
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+        background: #198754;
+        color: white;
+    }
+
+    .wizard-step-title {
+        font-size: 14px;
+        color: #666;
+    }
+
+    .wizard-step.active .wizard-step-title {
+        color: #0d6efd;
+        font-weight: bold;
+    }
+
+    .wizard-content {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        min-height: 400px;
+    }
+
+    .wizard-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .curl-input {
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+    }
+
+    .assertion-help {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 10px;
+    }
+</style>
+
+<div class="wizard-container">
+    <h2 class="mb-4">
+        <i class="bi bi-magic"></i> 创建定制任务 - 向导模式
+    </h2>
+
+    <!-- 步骤指示器 -->
+    <div class="wizard-steps">
+        <div class="wizard-step @(Model.CurrentStep >= 1 ? "active" : "") @(Model.CurrentStep > 1 ? "completed" : "")">
+            <div class="wizard-step-circle">1</div>
+            <div class="wizard-step-title">基本信息</div>
+        </div>
+        <div class="wizard-step @(Model.CurrentStep >= 2 ? "active" : "") @(Model.CurrentStep > 2 ? "completed" : "")">
+            <div class="wizard-step-circle">2</div>
+            <div class="wizard-step-title">HTTP授权</div>
+        </div>
+        <div class="wizard-step @(Model.CurrentStep >= 3 ? "active" : "")">
+            <div class="wizard-step-circle">3</div>
+            <div class="wizard-step-title">HTTP请求</div>
+        </div>
+    </div>
+
+    <!-- 表单内容 -->
+    <form asp-action="CreateWizard" method="post" id="wizardForm">
+        @Html.AntiForgeryToken()
+        @Html.HiddenFor(m => m.CurrentStep)
+
+        <!-- 保留所有字段的隐藏输入，以便在步骤间传递数据 -->
+        @if (Model.CurrentStep != 1)
+        {
+            @Html.HiddenFor(m => m.JobType)
+            @Html.HiddenFor(m => m.Name)
+            @Html.HiddenFor(m => m.Description)
+            @Html.HiddenFor(m => m.IsActive)
+        }
+        @if (Model.CurrentStep != 2)
+        {
+            @Html.HiddenFor(m => m.AuthType)
+            @Html.HiddenFor(m => m.AuthConfig)
+        }
+        @if (Model.CurrentStep != 3)
+        {
+            @Html.HiddenFor(m => m.HttpUrl)
+            @Html.HiddenFor(m => m.HttpMethod)
+            @Html.HiddenFor(m => m.Headers)
+            @Html.HiddenFor(m => m.RequestBody)
+            @Html.HiddenFor(m => m.DefaultParameters)
+            @Html.HiddenFor(m => m.AssertionExpression)
+            @Html.HiddenFor(m => m.CurlCommand)
+        }
+
+        <div class="wizard-content">
+            @if (Model.CurrentStep == 1)
+            {
+                <!-- 步骤1: 基本信息 -->
+                <h4 class="mb-4">步骤 1: 基本信息</h4>
+
+                <div class="mb-3">
+                    <label asp-for="JobType" class="form-label">
+                        任务类型 <span class="text-danger">*</span>
+                    </label>
+                    <input asp-for="JobType" class="form-control" placeholder="例如: DataSync, EmailSender" required />
+                    <span asp-validation-for="JobType" class="text-danger"></span>
+                    <small class="text-muted">用于标识任务的唯一类型，建议使用英文</small>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Name" class="form-label">
+                        任务名称 <span class="text-danger">*</span>
+                    </label>
+                    <input asp-for="Name" class="form-control" placeholder="例如: 数据同步任务" required />
+                    <span asp-validation-for="Name" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Description" class="form-label">任务描述</label>
+                    <textarea asp-for="Description" class="form-control" rows="4" placeholder="描述任务的用途和功能"></textarea>
+                    <span asp-validation-for="Description" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input asp-for="IsActive" class="form-check-input" type="checkbox" />
+                        <label asp-for="IsActive" class="form-check-label">启用任务</label>
+                    </div>
+                </div>
+            }
+            else if (Model.CurrentStep == 2)
+            {
+                <!-- 步骤2: HTTP授权（可选） -->
+                <h4 class="mb-4">步骤 2: HTTP授权（可选）</h4>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 此步骤为可选项。如果您的API不需要授权，可以直接跳过。
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="AuthType" class="form-label">认证类型</label>
+                    <select asp-for="AuthType" class="form-select" id="authTypeSelect">
+                        <option value="">无 (跳过)</option>
+                        <option value="Basic">Basic Auth</option>
+                        <option value="Bearer">Bearer Token</option>
+                        <option value="ApiKey">API Key</option>
+                    </select>
+                    <span asp-validation-for="AuthType" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3" id="authConfigDiv" style="display: none;">
+                    <label asp-for="AuthConfig" class="form-label">认证配置 (JSON)</label>
+                    <textarea asp-for="AuthConfig" class="form-control" rows="5" id="authConfigInput"></textarea>
+                    <span asp-validation-for="AuthConfig" class="text-danger"></span>
+
+                    <div class="mt-2">
+                        <small class="text-muted d-block" id="authConfigHelp"></small>
+                    </div>
+                </div>
+            }
+            else if (Model.CurrentStep == 3)
+            {
+                <!-- 步骤3: HTTP请求 -->
+                <h4 class="mb-4">步骤 3: HTTP请求配置</h4>
+
+                <div class="mb-4">
+                    <label for="curlInput" class="form-label">
+                        <i class="bi bi-terminal"></i> 粘贴 cURL 命令（可选）
+                    </label>
+                    <textarea class="form-control curl-input" id="curlInput" rows="8" placeholder="在此粘贴完整的 curl 命令，系统会自动解析...&#10;&#10;例如：&#10;curl 'https://api.example.com/endpoint' \&#10;  -H 'accept: application/json' \&#10;  -H 'content-type: application/json' \&#10;  --data-raw '{...}'">@Model.CurlCommand</textarea>
+                    <button type="button" class="btn btn-sm btn-secondary mt-2" id="parseCurlBtn">
+                        <i class="bi bi-arrow-down-circle"></i> 解析 cURL 命令
+                    </button>
+                </div>
+
+                <hr class="my-4" />
+
+                <div class="mb-3">
+                    <label asp-for="HttpUrl" class="form-label">
+                        HTTP URL <span class="text-danger">*</span>
+                    </label>
+                    <input asp-for="HttpUrl" class="form-control" type="url" placeholder="https://api.example.com/endpoint" required />
+                    <span asp-validation-for="HttpUrl" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="HttpMethod" class="form-label">
+                        HTTP 方法 <span class="text-danger">*</span>
+                    </label>
+                    <select asp-for="HttpMethod" class="form-select" required>
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="PATCH">PATCH</option>
+                    </select>
+                    <span asp-validation-for="HttpMethod" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Headers" class="form-label">HTTP Headers (JSON)</label>
+                    <textarea asp-for="Headers" class="form-control" rows="5" placeholder='{"Content-Type": "application/json", "X-Custom-Header": "value"}'></textarea>
+                    <span asp-validation-for="Headers" class="text-danger"></span>
+                    <small class="text-muted">自定义HTTP请求头，JSON格式</small>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="RequestBody" class="form-label">请求体内容</label>
+                    <textarea asp-for="RequestBody" class="form-control" rows="6" placeholder='{"key": "value"}'></textarea>
+                    <span asp-validation-for="RequestBody" class="text-danger"></span>
+                    <small class="text-muted">HTTP请求的Body内容</small>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="AssertionExpression" class="form-label">
+                        <i class="bi bi-check2-square"></i> 断言表达式
+                    </label>
+                    <input asp-for="AssertionExpression" class="form-control" placeholder="response[0].data[0].result==200" />
+                    <span asp-validation-for="AssertionExpression" class="text-danger"></span>
+
+                    <div class="assertion-help">
+                        <strong>断言表达式说明：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>用于验证HTTP响应是否符合预期</li>
+                            <li>示例: <code>response[0].data[0].result==200</code></li>
+                            <li>支持: <code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code></li>
+                            <li>支持访问JSON对象属性: <code>response.status</code>, <code>response.data.success</code></li>
+                            <li>支持数组索引: <code>response.items[0].id</code></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="DefaultParameters" class="form-label">默认参数 (JSON)</label>
+                    <textarea asp-for="DefaultParameters" class="form-control" rows="3" placeholder='{"param1": "value1", "param2": "value2"}'></textarea>
+                    <span asp-validation-for="DefaultParameters" class="text-danger"></span>
+                    <small class="text-muted">任务执行时的默认参数，JSON格式</small>
+                </div>
+
+                @Html.HiddenFor(m => m.CurlCommand)
+            }
+
+            <!-- 导航按钮 -->
+            <div class="wizard-actions">
+                <div>
+                    @if (Model.CurrentStep > 1)
+                    {
+                        <button type="submit" name="action" value="previous" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> 上一步
+                        </button>
+                    }
+                    else
+                    {
+                        <a href="@Url.Action("Index")" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> 取消
+                        </a>
+                    }
+                </div>
+                <div>
+                    @if (Model.CurrentStep < 3)
+                    {
+                        <button type="submit" name="action" value="next" class="btn btn-primary">
+                            下一步 <i class="bi bi-arrow-right"></i>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="submit" name="action" value="finish" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> 完成创建
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function() {
+            // 步骤2: 认证类型切换
+            $('#authTypeSelect').on('change', function() {
+                var authType = $(this).val();
+                var $authConfigDiv = $('#authConfigDiv');
+                var $authConfigInput = $('#authConfigInput');
+                var $authConfigHelp = $('#authConfigHelp');
+
+                if (authType) {
+                    $authConfigDiv.show();
+
+                    // 根据认证类型提供示例
+                    var placeholder = '';
+                    var help = '';
+
+                    switch(authType) {
+                        case 'Basic':
+                            placeholder = '{\n  "username": "your_username",\n  "password": "your_password"\n}';
+                            help = 'Basic Auth 需要提供用户名和密码';
+                            break;
+                        case 'Bearer':
+                            placeholder = '{\n  "token": "your_bearer_token"\n}';
+                            help = 'Bearer Token 认证，通常用于 OAuth 2.0';
+                            break;
+                        case 'ApiKey':
+                            placeholder = '{\n  "key": "your_api_key",\n  "headerName": "X-API-Key"\n}';
+                            help = 'API Key 认证，需要指定key和header名称';
+                            break;
+                    }
+
+                    $authConfigInput.attr('placeholder', placeholder);
+                    $authConfigHelp.text(help);
+                } else {
+                    $authConfigDiv.hide();
+                }
+            }).trigger('change');
+
+            // 步骤3: 解析 cURL 命令
+            $('#parseCurlBtn').on('click', function() {
+                var curlCommand = $('#curlInput').val().trim();
+
+                if (!curlCommand) {
+                    alert('请先粘贴 cURL 命令');
+                    return;
+                }
+
+                var $btn = $(this);
+                $btn.prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> 解析中...');
+
+                $.ajax({
+                    url: '@Url.Action("ParseCurl")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ curlCommand: curlCommand }),
+                    success: function(response) {
+                        if (response.success) {
+                            $('#HttpUrl').val(response.url);
+                            $('#HttpMethod').val(response.method);
+                            $('#Headers').val(response.headers);
+                            $('#RequestBody').val(response.requestBody);
+                            $('#CurlCommand').val(curlCommand);
+
+                            alert('cURL 命令解析成功！');
+                        } else {
+                            alert('解析失败: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var errorMsg = '解析失败';
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            errorMsg = response.message || errorMsg;
+                        } catch(e) {}
+                        alert(errorMsg);
+                    },
+                    complete: function() {
+                        $btn.prop('disabled', false).html('<i class="bi bi-arrow-down-circle"></i> 解析 cURL 命令');
+                    }
+                });
+            });
+
+            // JSON 格式验证
+            $('textarea[id$="AuthConfig"], textarea[id$="Headers"], textarea[id$="DefaultParameters"]').on('blur', function() {
+                var value = $(this).val().trim();
+                if (value && value !== '') {
+                    try {
+                        JSON.parse(value);
+                        $(this).removeClass('is-invalid').addClass('is-valid');
+                    } catch (e) {
+                        $(this).removeClass('is-valid').addClass('is-invalid');
+                    }
+                } else {
+                    $(this).removeClass('is-invalid is-valid');
+                }
+            });
+        });
+    </script>
+}
