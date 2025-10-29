@@ -13,7 +13,7 @@ public interface IHangfireJobService
     /// <summary>
     /// 添加定时任务到Hangfire
     /// </summary>
-    string ScheduleRecurringJob(Guid customJobId, string cronExpression, Dictionary<string, object>? parameters = null);
+    Task<string> ScheduleRecurringJob(Guid customJobId, string cronExpression, Dictionary<string, object>? parameters = null);
 
     /// <summary>
     /// 移除定时任务

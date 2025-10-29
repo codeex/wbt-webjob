@@ -39,19 +39,34 @@ public class HangfireJobService : IHangfireJobService
     /// <summary>
     /// 添加定时任务到Hangfire
     /// </summary>
-    public string ScheduleRecurringJob(Guid customJobId, string cronExpression, Dictionary<string, object>? parameters = null)
+    public async Task<string> ScheduleRecurringJob(Guid customJobId, string cronExpression, Dictionary<string, object>? parameters = null)
     {
+        // 获取CustomJob信息以便设置显示名称
+        var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+        var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == customJobId);
+
+        if (customJob == null)
+        {
+            _logger.LogError($"CustomJob {customJobId} not found");
+            throw new Exception($"CustomJob {customJobId} not found");
+        }
+
         var recurringJobId = $"CustomJob_{customJobId}";
+
+        // 设置显示名称：任务名称 + 任务ID
+        var displayName = $"{customJob.Name} (ID: {customJobId})";
+
         RecurringJob.AddOrUpdate(
             recurringJobId,
             () => ExecuteCustomJobAsync(customJobId, parameters),
             cronExpression,
             new RecurringJobOptions
             {
-                TimeZone = TimeZoneInfo.Local
+                TimeZone = TimeZoneInfo.Local,
+                DisplayName = displayName
             });
 
-        _logger.LogInformation($"Scheduled recurring job for CustomJob {customJobId}, RecurringJobId: {recurringJobId}, Cron: {cronExpression}");
+        _logger.LogInformation($"Scheduled recurring job for CustomJob {customJobId}, RecurringJobId: {recurringJobId}, DisplayName: {displayName}, Cron: {cronExpression}");
         return recurringJobId;
     }
 

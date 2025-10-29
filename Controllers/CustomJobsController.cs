@@ -424,7 +424,7 @@ public class CustomJobsController : Controller
             await _customJobService.UpdateCustomJobAsync(customJob);
 
             // 添加到Hangfire定时任务
-            var recurringJobId = _hangfireJobService.ScheduleRecurringJob(id, request.CronExpression, request.Parameters);
+            var recurringJobId = await _hangfireJobService.ScheduleRecurringJob(id, request.CronExpression, request.Parameters);
 
             _logger.LogInformation($"Recurring job scheduled for CustomJob {id}, RecurringJobId: {recurringJobId}, Cron: {request.CronExpression}");
 
