@@ -127,6 +127,47 @@
                 </div>
             </div>
 
+            <!-- 定时调度配置 -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h5 class="mb-3">
+                        <i class="bi bi-clock-history"></i> 定时调度配置（可选）
+                    </h5>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input asp-for="EnableSchedule" class="form-check-input" type="checkbox" id="enableScheduleSwitch" />
+                            <label asp-for="EnableSchedule" class="form-check-label">
+                                <strong>启用定时调度</strong>
+                            </label>
+                        </div>
+                        <small class="text-muted">开启后任务将按照Cron表达式定时自动执行</small>
+                    </div>
+
+                    <div id="cronConfigSection" style="display: none;">
+                        <div class="mb-3">
+                            <label asp-for="CronExpression" class="form-label">Cron表达式</label>
+                            <input asp-for="CronExpression" class="form-control font-monospace" placeholder="0 * * * *" id="cronExpressionInput" />
+                            <span asp-validation-for="CronExpression" class="text-danger"></span>
+                            <small class="text-muted">格式: 分钟 小时 日 月 周 (例如: 0 * * * * 表示每小时执行)</small>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <strong><i class="bi bi-lightbulb"></i> 常用Cron表达式示例：</strong>
+                            <ul class="mb-0 mt-2 small">
+                                <li><code>0 * * * *</code> - 每小时执行一次</li>
+                                <li><code>0 0 * * *</code> - 每天午夜执行</li>
+                                <li><code>0 9 * * *</code> - 每天上午9点执行</li>
+                                <li><code>0 0 * * 1</code> - 每周一午夜执行</li>
+                                <li><code>0 0 1 * *</code> - 每月1号午夜执行</li>
+                                <li><code>*/5 * * * *</code> - 每5分钟执行一次</li>
+                                <li><code>0 */2 * * *</code> - 每2小时执行一次</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="row mt-4">
                 <div class="col-12">
                     <div class="alert alert-info">
@@ -161,20 +202,32 @@
     <partial name="_ValidationScriptsPartial" />
 
     <script>
-        // JSON 格式验证
-        $('textarea[id$="AuthConfig"], textarea[id$="Headers"], textarea[id$="DefaultParameters"]').on('blur', function() {
-            const value = $(this).val().trim();
-            if (value && value !== '') {
-                try {
-                    JSON.parse(value);
-                    $(this).removeClass('is-invalid').addClass('is-valid');
-                } catch (e) {
-                    $(this).removeClass('is-valid').addClass('is-invalid');
-                    alert('JSON 格式错误: ' + e.message);
+        $(document).ready(function() {
+            // JSON 格式验证
+            $('textarea[id$="AuthConfig"], textarea[id$="Headers"], textarea[id$="DefaultParameters"]').on('blur', function() {
+                const value = $(this).val().trim();
+                if (value && value !== '') {
+                    try {
+                        JSON.parse(value);
+                        $(this).removeClass('is-invalid').addClass('is-valid');
+                    } catch (e) {
+                        $(this).removeClass('is-valid').addClass('is-invalid');
+                        alert('JSON 格式错误: ' + e.message);
+                    }
+                } else {
+                    $(this).removeClass('is-invalid is-valid');
                 }
-            } else {
-                $(this).removeClass('is-invalid is-valid');
-            }
+            });
+
+            // 定时调度开关
+            $('#enableScheduleSwitch').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#cronConfigSection').slideDown();
+                } else {
+                    $('#cronConfigSection').slideUp();
+                    $('#cronExpressionInput').val('');
+                }
+            }).trigger('change');
         });
     </script>
 }

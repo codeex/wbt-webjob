@@ -113,9 +113,13 @@
             <div class="wizard-step-circle">2</div>
             <div class="wizard-step-title">HTTP授权</div>
         </div>
-        <div class="wizard-step @(Model.CurrentStep >= 3 ? "active" : "")">
+        <div class="wizard-step @(Model.CurrentStep >= 3 ? "active" : "") @(Model.CurrentStep > 3 ? "completed" : "")">
             <div class="wizard-step-circle">3</div>
             <div class="wizard-step-title">HTTP请求</div>
+        </div>
+        <div class="wizard-step @(Model.CurrentStep >= 4 ? "active" : "")">
+            <div class="wizard-step-circle">4</div>
+            <div class="wizard-step-title">定时调度</div>
         </div>
     </div>
 
@@ -146,6 +150,16 @@
             @Html.HiddenFor(m => m.DefaultParameters)
             @Html.HiddenFor(m => m.AssertionExpression)
             @Html.HiddenFor(m => m.CurlCommand)
+        }
+        @if (Model.CurrentStep != 4)
+        {
+            @Html.HiddenFor(m => m.EnableSchedule)
+            @Html.HiddenFor(m => m.CronExpression)
+            @Html.HiddenFor(m => m.CronMinute)
+            @Html.HiddenFor(m => m.CronHour)
+            @Html.HiddenFor(m => m.CronDay)
+            @Html.HiddenFor(m => m.CronMonth)
+            @Html.HiddenFor(m => m.CronWeek)
         }
 
         <div class="wizard-content">
@@ -295,6 +309,111 @@
 
                 @Html.HiddenFor(m => m.CurlCommand)
             }
+            else if (Model.CurrentStep == 4)
+            {
+                <!-- 步骤4: 定时调度配置 -->
+                <h4 class="mb-4">步骤 4: 定时调度配置（可选）</h4>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 此步骤为可选项。如果您不需要定时执行任务，可以直接完成创建。
+                </div>
+
+                <div class="mb-4">
+                    <div class="form-check form-switch">
+                        <input asp-for="EnableSchedule" class="form-check-input" type="checkbox" id="enableScheduleSwitch" />
+                        <label asp-for="EnableSchedule" class="form-check-label">
+                            <strong>启用定时调度</strong>
+                        </label>
+                    </div>
+                    <small class="text-muted">开启后任务将按照Cron表达式定时自动执行</small>
+                </div>
+
+                <div id="cronConfigSection" style="display: none;">
+                    <div class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <i class="bi bi-clock-history"></i> 快速设置
+                        </div>
+                        <div class="card-body">
+                            <div class="btn-group-vertical btn-group-sm w-100" role="group">
+                                <button type="button" class="btn btn-outline-primary cron-preset" data-cron="0 * * * *">每小时执行一次</button>
+                                <button type="button" class="btn btn-outline-primary cron-preset" data-cron="0 0 * * *">每天执行一次（午夜）</button>
+                                <button type="button" class="btn btn-outline-primary cron-preset" data-cron="0 9 * * *">每天上午9点执行</button>
+                                <button type="button" class="btn btn-outline-primary cron-preset" data-cron="0 0 * * 1">每周一执行（午夜）</button>
+                                <button type="button" class="btn btn-outline-primary cron-preset" data-cron="0 0 1 * *">每月1号执行（午夜）</button>
+                                <button type="button" class="btn btn-outline-primary cron-preset" data-cron="*/5 * * * *">每5分钟执行一次</button>
+                                <button type="button" class="btn btn-outline-primary cron-preset" data-cron="0 */2 * * *">每2小时执行一次</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-gear"></i> 自定义配置
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="cronMinute" class="form-label">分钟</label>
+                                    <input type="text" class="form-control cron-field" id="cronMinute" asp-for="CronMinute" placeholder="*" />
+                                    <small class="text-muted">0-59 或 * 或 */5</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="cronHour" class="form-label">小时</label>
+                                    <input type="text" class="form-control cron-field" id="cronHour" asp-for="CronHour" placeholder="*" />
+                                    <small class="text-muted">0-23 或 * 或 */2</small>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="cronDay" class="form-label">日</label>
+                                    <input type="text" class="form-control cron-field" id="cronDay" asp-for="CronDay" placeholder="*" />
+                                    <small class="text-muted">1-31 或 *</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="cronMonth" class="form-label">月</label>
+                                    <input type="text" class="form-control cron-field" id="cronMonth" asp-for="CronMonth" placeholder="*" />
+                                    <small class="text-muted">1-12 或 *</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="cronWeek" class="form-label">周（星期）</label>
+                                    <input type="text" class="form-control cron-field" id="cronWeek" asp-for="CronWeek" placeholder="*" />
+                                    <small class="text-muted">0-6 (0=周日) 或 *</small>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-secondary mt-3">
+                                <strong><i class="bi bi-lightbulb"></i> Cron表达式说明：</strong>
+                                <ul class="mb-0 mt-2 small">
+                                    <li><code>*</code> - 表示任意值</li>
+                                    <li><code>*/n</code> - 表示每n个单位执行一次（如 */5 表示每5分钟）</li>
+                                    <li><code>n</code> - 表示具体的值（如 5 表示第5分钟/小时/日）</li>
+                                    <li><code>n,m</code> - 表示多个值（如 1,15 表示第1和15分钟）</li>
+                                    <li><code>n-m</code> - 表示范围（如 1-5 表示1到5）</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-code-square"></i> 生成的Cron表达式
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group">
+                                <input type="text" class="form-control font-monospace" id="cronExpressionDisplay" readonly placeholder="0 * * * *" />
+                                <button type="button" class="btn btn-outline-secondary" id="copyCronBtn" title="复制">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                            <input type="hidden" asp-for="CronExpression" id="cronExpressionInput" />
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-info-circle"></i> 格式: 分钟 小时 日 月 周
+                            </small>
+                            <div id="cronDescription" class="mt-2 text-primary"></div>
+                        </div>
+                    </div>
+                </div>
+            }
 
             <!-- 导航按钮 -->
             <div class="wizard-actions">
@@ -313,7 +432,7 @@
                     }
                 </div>
                 <div>
-                    @if (Model.CurrentStep < 3)
+                    @if (Model.CurrentStep < 4)
                     {
                         <button type="submit" name="action" value="next" class="btn btn-primary">
                             下一步 <i class="bi bi-arrow-right"></i>
@@ -430,6 +549,129 @@
                     $(this).removeClass('is-invalid is-valid');
                 }
             });
+
+            // 步骤4: 定时调度配置
+            $('#enableScheduleSwitch').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#cronConfigSection').slideDown();
+                    updateCronExpression();
+                } else {
+                    $('#cronConfigSection').slideUp();
+                    $('#cronExpressionInput').val('');
+                    $('#cronExpressionDisplay').val('');
+                }
+            }).trigger('change');
+
+            // Cron表达式更新函数
+            function updateCronExpression() {
+                var minute = $('#cronMinute').val() || '*';
+                var hour = $('#cronHour').val() || '*';
+                var day = $('#cronDay').val() || '*';
+                var month = $('#cronMonth').val() || '*';
+                var week = $('#cronWeek').val() || '*';
+
+                var cronExpr = minute + ' ' + hour + ' ' + day + ' ' + month + ' ' + week;
+                $('#cronExpressionInput').val(cronExpr);
+                $('#cronExpressionDisplay').val(cronExpr);
+
+                // 生成描述
+                var description = generateCronDescription(minute, hour, day, month, week);
+                $('#cronDescription').text(description);
+            }
+
+            // 生成Cron表达式的可读描述
+            function generateCronDescription(minute, hour, day, month, week) {
+                var parts = [];
+
+                if (minute === '*' && hour === '*' && day === '*' && month === '*' && week === '*') {
+                    return '每分钟执行一次';
+                }
+
+                // 分钟
+                if (minute.startsWith('*/')) {
+                    parts.push('每' + minute.substring(2) + '分钟');
+                } else if (minute !== '*') {
+                    parts.push('第' + minute + '分钟');
+                }
+
+                // 小时
+                if (hour.startsWith('*/')) {
+                    parts.push('每' + hour.substring(2) + '小时');
+                } else if (hour !== '*') {
+                    parts.push(hour + '点');
+                }
+
+                // 日
+                if (day !== '*') {
+                    parts.push('每月' + day + '号');
+                }
+
+                // 月
+                if (month !== '*') {
+                    parts.push(month + '月');
+                }
+
+                // 周
+                if (week !== '*') {
+                    var weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+                    var weekNum = parseInt(week);
+                    if (!isNaN(weekNum) && weekNum >= 0 && weekNum <= 6) {
+                        parts.push(weekNames[weekNum]);
+                    } else {
+                        parts.push('每' + week);
+                    }
+                }
+
+                if (parts.length === 0) {
+                    return '自定义表达式';
+                }
+
+                return parts.join('，') + '执行';
+            }
+
+            // 监听cron字段变化
+            $('.cron-field').on('input', function() {
+                updateCronExpression();
+            });
+
+            // 快速设置按钮
+            $('.cron-preset').on('click', function() {
+                var cronExpr = $(this).data('cron');
+                var parts = cronExpr.split(' ');
+
+                $('#cronMinute').val(parts[0] || '*');
+                $('#cronHour').val(parts[1] || '*');
+                $('#cronDay').val(parts[2] || '*');
+                $('#cronMonth').val(parts[3] || '*');
+                $('#cronWeek').val(parts[4] || '*');
+
+                updateCronExpression();
+
+                // 高亮选中的按钮
+                $('.cron-preset').removeClass('active');
+                $(this).addClass('active');
+            });
+
+            // 复制Cron表达式
+            $('#copyCronBtn').on('click', function() {
+                var cronExpr = $('#cronExpressionDisplay').val();
+                navigator.clipboard.writeText(cronExpr).then(function() {
+                    alert('Cron表达式已复制到剪贴板');
+                }).catch(function() {
+                    // 备用方法
+                    var $temp = $('<input>');
+                    $('body').append($temp);
+                    $temp.val(cronExpr).select();
+                    document.execCommand('copy');
+                    $temp.remove();
+                    alert('Cron表达式已复制到剪贴板');
+                });
+            });
+
+            // 初始化：如果已有值，更新表达式
+            if ($('#cronMinute').val()) {
+                updateCronExpression();
+            }
         });
     </script>
 }

@@ -146,6 +146,59 @@
             </div>
         </div>
     }
+
+    <!-- 定时调度卡片 -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header @(Model.EnableSchedule ? "bg-primary" : "bg-secondary") text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock-history"></i> 定时调度
+                </h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">调度状态:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge @(Model.EnableSchedule ? "bg-success" : "bg-secondary")">
+                            @(Model.EnableSchedule ? "已启用" : "未启用")
+                        </span>
+                    </dd>
+
+                    @if (Model.EnableSchedule)
+                    {
+                        <dt class="col-sm-5">Cron表达式:</dt>
+                        <dd class="col-sm-7">
+                            <code class="bg-light p-1 rounded">@(Model.CronExpression ?? "-")</code>
+                        </dd>
+
+                        @if (Model.NextExecutionTime.HasValue)
+                        {
+                            <dt class="col-sm-5">下次执行:</dt>
+                            <dd class="col-sm-7">
+                                @Model.NextExecutionTime.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            </dd>
+                        }
+
+                        @if (Model.LastExecutionTime.HasValue)
+                        {
+                            <dt class="col-sm-5">上次执行:</dt>
+                            <dd class="col-sm-7">
+                                @Model.LastExecutionTime.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            </dd>
+                        }
+                    }
+                    else
+                    {
+                        <dt class="col-sm-12">
+                            <div class="alert alert-info mb-0 mt-2">
+                                <i class="bi bi-info-circle"></i> 此任务未配置定时调度，仅支持手动执行。
+                            </div>
+                        </dt>
+                    }
+                </dl>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- 执行任务参数模态框 -->

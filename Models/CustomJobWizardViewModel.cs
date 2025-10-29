@@ -50,6 +50,19 @@ public class CustomJobWizardViewModel
     [MaxLength(1000)]
     public string? AssertionExpression { get; set; } // 断言表达式
 
+    // 步骤4: 定时调度配置（可选）
+    public bool EnableSchedule { get; set; } = false; // 是否启用定时调度
+
+    [MaxLength(100)]
+    public string? CronExpression { get; set; } // Cron表达式
+
+    // Cron表达式构建器字段
+    public string? CronMinute { get; set; } = "*"; // 分钟
+    public string? CronHour { get; set; } = "*"; // 小时
+    public string? CronDay { get; set; } = "*"; // 日
+    public string? CronMonth { get; set; } = "*"; // 月
+    public string? CronWeek { get; set; } = "*"; // 周
+
     // 编辑时使用
     public Guid? CustomJobId { get; set; }
 
@@ -72,7 +85,9 @@ public class CustomJobWizardViewModel
             RequestBody = this.RequestBody,
             DefaultParameters = this.DefaultParameters,
             AssertionExpression = this.AssertionExpression,
-            CurlCommand = this.CurlCommand
+            CurlCommand = this.CurlCommand,
+            EnableSchedule = this.EnableSchedule,
+            CronExpression = this.CronExpression
         };
 
         if (CustomJobId.HasValue)
@@ -103,7 +118,9 @@ public class CustomJobWizardViewModel
             RequestBody = customJob.RequestBody,
             DefaultParameters = customJob.DefaultParameters,
             AssertionExpression = customJob.AssertionExpression,
-            CurlCommand = customJob.CurlCommand
+            CurlCommand = customJob.CurlCommand,
+            EnableSchedule = customJob.EnableSchedule,
+            CronExpression = customJob.CronExpression
         };
     }
 }

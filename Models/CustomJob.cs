@@ -44,6 +44,15 @@ public class CustomJob
     [MaxLength(1000)]
     public string? AssertionExpression { get; set; } // 断言表达式，如: response[0].data[0].result==200
 
+    [MaxLength(100)]
+    public string? CronExpression { get; set; } // Cron表达式，用于定时执行任务
+
+    public bool EnableSchedule { get; set; } = false; // 是否启用定时调度
+
+    public DateTime? NextExecutionTime { get; set; } // 下次执行时间
+
+    public DateTime? LastExecutionTime { get; set; } // 上次执行时间
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
