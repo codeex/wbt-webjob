@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: wbt-webjob-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: wbt_webjob
+      MYSQL_USER: wbt_user
+      MYSQL_PASSWORD: wbt_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - wbt-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  wbt-network:
+    driver: bridge
