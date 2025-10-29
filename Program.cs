@@ -17,6 +17,14 @@ builder.Services.AddRazorPages();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// 添加Session支持（用于向导模式）
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
 // 配置MySQL数据库连接 - 使用HangfireConnection作为唯一数据库
 var hangfireConnectionString = builder.Configuration.GetConnectionString("HangfireConnection");
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 21));
@@ -101,6 +109,8 @@ app.UseStaticFiles();
 app.UseCors();
 
 app.UseRouting();
+
+app.UseSession();
 
 app.UseAuthorization();
 

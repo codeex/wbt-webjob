@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WbtWebJob.Models;
 using WbtWebJob.Services;
+using WbtWebJob.Utils;
 
 namespace WbtWebJob.Controllers;
 
@@ -61,6 +62,158 @@ public class CustomJobsController : Controller
 
         return View(customJob);
     }
+
+    // GET: /CustomJobs/CreateWizard
+    public IActionResult CreateWizard(int step = 1)
+    {
+        var model = new CustomJobWizardViewModel
+        {
+            CurrentStep = step
+        };
+
+        // 从TempData恢复数据（如果有）
+        if (TempData["WizardData"] is string wizardDataJson)
+        {
+            try
+            {
+                var savedModel = System.Text.Json.JsonSerializer.Deserialize<CustomJobWizardViewModel>(wizardDataJson);
+                if (savedModel != null)
+                {
+                    model = savedModel;
+                    model.CurrentStep = step;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "恢复向导数据失败");
+            }
+        }
+
+        return View(model);
+    }
+
+    // POST: /CustomJobs/CreateWizard
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateWizard(CustomJobWizardViewModel model, string action)
+    {
+        // 保存当前数据到TempData
+        var wizardDataJson = System.Text.Json.JsonSerializer.Serialize(model);
+        TempData["WizardData"] = wizardDataJson;
+
+        if (action == "next")
+        {
+            // 验证当前步骤
+            if (!ValidateWizardStep(model, model.CurrentStep))
+            {
+                return View(model);
+            }
+
+            // 进入下一步
+            model.CurrentStep++;
+            TempData["WizardData"] = System.Text.Json.JsonSerializer.Serialize(model);
+            return RedirectToAction(nameof(CreateWizard), new { step = model.CurrentStep });
+        }
+        else if (action == "previous")
+        {
+            // 返回上一步
+            model.CurrentStep--;
+            return RedirectToAction(nameof(CreateWizard), new { step = model.CurrentStep });
+        }
+        else if (action == "finish")
+        {
+            // 验证所有步骤
+            if (!ValidateWizardStep(model, 1) || !ValidateWizardStep(model, 3))
+            {
+                return View(model);
+            }
+
+            try
+            {
+                var customJob = model.ToCustomJob();
+                await _customJobService.CreateCustomJobAsync(customJob);
+
+                TempData.Remove("WizardData");
+                TempData["SuccessMessage"] = "定制任务创建成功！";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "创建定制任务失败");
+                ModelState.AddModelError("", "创建失败: " + ex.Message);
+                return View(model);
+            }
+        }
+
+        return View(model);
+    }
+
+    // POST: /CustomJobs/ParseCurl - AJAX接口，用于解析curl命令
+    [HttpPost]
+    public IActionResult ParseCurl([FromBody] CurlParseRequest request)
+    {
+        try
+        {
+            var parseResult = CurlParser.Parse(request.CurlCommand);
+
+            if (!parseResult.Success)
+            {
+                return BadRequest(new { success = false, message = parseResult.ErrorMessage });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                url = parseResult.Url,
+                method = parseResult.Method,
+                headers = CurlParser.HeadersToJson(parseResult.Headers),
+                requestBody = parseResult.RequestBody
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "解析curl命令失败");
+            return BadRequest(new { success = false, message = "解析失败: " + ex.Message });
+        }
+    }
+
+    private bool ValidateWizardStep(CustomJobWizardViewModel model, int step)
+    {
+        switch (step)
+        {
+            case 1: // 基本信息
+                if (string.IsNullOrWhiteSpace(model.JobType))
+                {
+                    ModelState.AddModelError(nameof(model.JobType), "任务类型不能为空");
+                    return false;
+                }
+                if (string.IsNullOrWhiteSpace(model.Name))
+                {
+                    ModelState.AddModelError(nameof(model.Name), "任务名称不能为空");
+                    return false;
+                }
+                break;
+            case 3: // HTTP请求
+                if (string.IsNullOrWhiteSpace(model.HttpUrl))
+                {
+                    ModelState.AddModelError(nameof(model.HttpUrl), "HTTP URL不能为空");
+                    return false;
+                }
+                if (string.IsNullOrWhiteSpace(model.HttpMethod))
+                {
+                    ModelState.AddModelError(nameof(model.HttpMethod), "HTTP方法不能为空");
+                    return false;
+                }
+                break;
+        }
+        return true;
+    }
+
+    public class CurlParseRequest
+    {
+        public string CurlCommand { get; set; } = string.Empty;
+    }
+
 
     // GET: /CustomJobs/Edit/{id}
     public async Task<IActionResult> Edit(Guid id)
