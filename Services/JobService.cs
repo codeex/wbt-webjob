@@ -110,4 +110,15 @@ public class JobService : IJobService
 
         return await GetJobLogsAsync(job.JobId);
     }
+
+    public async Task<IEnumerable<JobLog>> GetJobLogsByJobTypeAsync(string jobType, int page = 1, int pageSize = 50)
+    {
+        return await _context.JobLogs
+            .Include(l => l.WebJob)
+            .Where(l => l.WebJob!.JobType == jobType)
+            .OrderByDescending(l => l.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+    }
 }

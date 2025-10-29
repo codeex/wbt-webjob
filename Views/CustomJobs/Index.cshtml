@@ -59,8 +59,9 @@
                             <th>HTTP方法</th>
                             <th>URL</th>
                             <th>描述</th>
+                            <th>调度状态</th>
                             <th>创建时间</th>
-                            <th style="width: 250px;">操作</th>
+                            <th style="width: 280px;">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -90,6 +91,18 @@
                                     <small>@(job.Description ?? "-")</small>
                                 </td>
                                 <td>
+                                    @if (job.EnableSchedule && !string.IsNullOrEmpty(job.CronExpression))
+                                    {
+                                        <span class="badge bg-success" title="@job.CronExpression">
+                                            <i class="bi bi-clock"></i> 已启用
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">未启用</span>
+                                    }
+                                </td>
+                                <td>
                                     <small>@job.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
                                 </td>
                                 <td>
@@ -97,13 +110,27 @@
                                         @if (job.IsActive)
                                         {
                                             <button type="button"
+                                                    class="btn btn-primary btn-test"
+                                                    data-job-id="@job.CustomJobId"
+                                                    data-job-name="@job.Name"
+                                                    title="测试执行（仅执行一次）">
+                                                <i class="bi bi-play-circle"></i> 测试
+                                            </button>
+                                            <button type="button"
                                                     class="btn btn-success btn-execute"
                                                     data-job-id="@job.CustomJobId"
                                                     data-job-name="@job.Name"
-                                                    title="执行任务">
-                                                <i class="bi bi-play-fill"></i> 执行
+                                                    data-cron="@job.CronExpression"
+                                                    data-enable-schedule="@job.EnableSchedule.ToString().ToLower()"
+                                                    title="按照Cron表达式定时执行">
+                                                <i class="bi bi-clock"></i> 执行
                                             </button>
                                         }
+                                        <a href="@Url.Action("JobLogs", new { customJobId = job.CustomJobId })"
+                                           class="btn btn-secondary"
+                                           title="查看日志">
+                                            <i class="bi bi-file-text"></i>
+                                        </a>
                                         <a href="@Url.Action("Details", new { id = job.CustomJobId })"
                                            class="btn btn-info"
                                            title="查看详情">
@@ -138,15 +165,51 @@
     </div>
 </div>
 
+<!-- 测试任务参数模态框 -->
+<div class="modal fade" id="testModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">测试任务: <span id="testJobName"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 测试模式将在Hangfire中创建一次性任务，立即执行一次
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">任务参数 (JSON格式，可选)</label>
+                    <textarea class="form-control" id="testParameters" rows="5" placeholder='{"key": "value"}'></textarea>
+                    <small class="text-muted">请输入有效的JSON格式参数，如果不需要参数请留空</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmTest">
+                    <i class="bi bi-play-circle"></i> 确认测试
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 执行任务参数模态框 -->
 <div class="modal fade" id="executeModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">执行任务: <span id="executeJobName"></span></h5>
+                <h5 class="modal-title">定时执行任务: <span id="executeJobName"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-clock"></i> 定时模式将在Hangfire中创建定时任务，按照Cron表达式定期执行
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Cron表达式</label>
+                    <input type="text" class="form-control" id="executeCron" placeholder="0 */5 * * *">
+                    <small class="text-muted">当前任务的Cron表达式: <span id="currentCron"></span></small>
+                </div>
                 <div class="mb-3">
                     <label class="form-label">任务参数 (JSON格式，可选)</label>
                     <textarea class="form-control" id="executeParameters" rows="5" placeholder='{"key": "value"}'></textarea>
@@ -156,7 +219,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-success" id="confirmExecute">
-                    <i class="bi bi-play-fill"></i> 确认执行
+                    <i class="bi bi-clock"></i> 确认执行
                 </button>
             </div>
         </div>
@@ -167,17 +230,17 @@
     <script>
         let currentJobId = null;
 
-        // 执行任务
-        $('.btn-execute').click(function() {
+        // 测试任务（一次性执行）
+        $('.btn-test').click(function() {
             currentJobId = $(this).data('job-id');
             const jobName = $(this).data('job-name');
-            $('#executeJobName').text(jobName);
-            $('#executeParameters').val('');
-            $('#executeModal').modal('show');
+            $('#testJobName').text(jobName);
+            $('#testParameters').val('');
+            $('#testModal').modal('show');
         });
 
-        $('#confirmExecute').click(function() {
-            const parametersText = $('#executeParameters').val().trim();
+        $('#confirmTest').click(function() {
+            const parametersText = $('#testParameters').val().trim();
             let parameters = null;
 
             if (parametersText) {
@@ -190,22 +253,85 @@
             }
 
             const btn = $(this);
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 执行中...');
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 提交中...');
 
             $.ajax({
-                url: '/CustomJobs/Execute/' + currentJobId,
+                url: '/CustomJobs/TestExecute/' + currentJobId,
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(parameters),
                 success: function(response) {
-                    alert('任务提交成功！\n任务ID: ' + response.jobId + '\n业务ID: ' + response.businessId);
-                    $('#executeModal').modal('hide');
+                    alert('测试任务已提交到Hangfire！\nHangfire Job ID: ' + response.hangfireJobId);
+                    $('#testModal').modal('hide');
                 },
                 error: function(xhr) {
-                    alert('执行失败: ' + (xhr.responseJSON?.message || '未知错误'));
+                    alert('提交失败: ' + (xhr.responseJSON?.message || '未知错误'));
                 },
                 complete: function() {
-                    btn.prop('disabled', false).html('<i class="bi bi-play-fill"></i> 确认执行');
+                    btn.prop('disabled', false).html('<i class="bi bi-play-circle"></i> 确认测试');
+                }
+            });
+        });
+
+        // 定时执行任务
+        $('.btn-execute').click(function() {
+            currentJobId = $(this).data('job-id');
+            const jobName = $(this).data('job-name');
+            const cronExpression = $(this).data('cron');
+            const enableSchedule = $(this).data('enable-schedule');
+
+            $('#executeJobName').text(jobName);
+            $('#executeCron').val(cronExpression || '');
+            $('#currentCron').text(cronExpression || '未设置');
+            $('#executeParameters').val('');
+
+            if (!cronExpression) {
+                $('#executeCron').val('0 */5 * * *'); // 默认每5分钟
+            }
+
+            $('#executeModal').modal('show');
+        });
+
+        $('#confirmExecute').click(function() {
+            const parametersText = $('#executeParameters').val().trim();
+            const cronExpression = $('#executeCron').val().trim();
+            let parameters = null;
+
+            if (!cronExpression) {
+                alert('请输入Cron表达式');
+                return;
+            }
+
+            if (parametersText) {
+                try {
+                    parameters = JSON.parse(parametersText);
+                } catch (e) {
+                    alert('参数格式错误，请输入有效的JSON格式');
+                    return;
+                }
+            }
+
+            const btn = $(this);
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 提交中...');
+
+            $.ajax({
+                url: '/CustomJobs/ScheduleExecute/' + currentJobId,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    cronExpression: cronExpression,
+                    parameters: parameters
+                }),
+                success: function(response) {
+                    alert('定时任务已添加到Hangfire！\n任务ID: ' + response.recurringJobId + '\nCron表达式: ' + response.cronExpression);
+                    $('#executeModal').modal('hide');
+                    location.reload();
+                },
+                error: function(xhr) {
+                    alert('提交失败: ' + (xhr.responseJSON?.message || '未知错误'));
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html('<i class="bi bi-clock"></i> 确认执行');
                 }
             });
         });

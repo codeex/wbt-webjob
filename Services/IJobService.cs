@@ -12,4 +12,5 @@ public interface IJobService
     Task AddJobLogAsync(Guid jobId, string step, string level, string? message, object? details);
     Task<IEnumerable<JobLog>> GetJobLogsAsync(Guid jobId);
     Task<IEnumerable<JobLog>> GetJobLogsByBusinessIdAsync(string businessId);
+    Task<IEnumerable<JobLog>> GetJobLogsByJobTypeAsync(string jobType, int page = 1, int pageSize = 50);
 }

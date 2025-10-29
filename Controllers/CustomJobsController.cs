@@ -13,17 +13,20 @@ public class CustomJobsController : Controller
     private readonly ICustomJobService _customJobService;
     private readonly IJobService _jobService;
     private readonly IJobExecutor _jobExecutor;
+    private readonly IHangfireJobService _hangfireJobService;
     private readonly ILogger<CustomJobsController> _logger;
 
     public CustomJobsController(
         ICustomJobService customJobService,
         IJobService jobService,
         IJobExecutor jobExecutor,
+        IHangfireJobService hangfireJobService,
         ILogger<CustomJobsController> logger)
     {
         _customJobService = customJobService;
         _jobService = jobService;
         _jobExecutor = jobExecutor;
+        _hangfireJobService = hangfireJobService;
         _logger = logger;
     }
 
@@ -347,6 +350,205 @@ public class CustomJobsController : Controller
         {
             _logger.LogError(ex, "执行任务失败");
             return BadRequest(new { success = false, message = "执行失败: " + ex.Message });
+        }
+    }
+
+    // POST: /CustomJobs/TestExecute/{id} - 测试执行（一次性，添加到Hangfire）
+    [HttpPost]
+    public async Task<IActionResult> TestExecute(Guid id, [FromBody] Dictionary<string, object>? parameters = null)
+    {
+        try
+        {
+            var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+            var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == id);
+
+            if (customJob == null)
+            {
+                return NotFound(new { success = false, message = "任务未找到" });
+            }
+
+            // 添加到Hangfire队列，立即执行一次
+            var hangfireJobId = _hangfireJobService.EnqueueTestJob(id, parameters);
+
+            _logger.LogInformation($"Test job enqueued for CustomJob {id}, Hangfire JobId: {hangfireJobId}");
+
+            return Ok(new
+            {
+                success = true,
+                message = "测试任务已提交到Hangfire",
+                hangfireJobId = hangfireJobId,
+                customJobId = id,
+                customJobName = customJob.Name
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "提交测试任务失败");
+            return BadRequest(new { success = false, message = "提交失败: " + ex.Message });
+        }
+    }
+
+    // POST: /CustomJobs/ScheduleExecute/{id} - 定时执行（按照Cron添加到Hangfire）
+    [HttpPost]
+    public async Task<IActionResult> ScheduleExecute(Guid id, [FromBody] ScheduleExecuteRequest request)
+    {
+        try
+        {
+            var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+            var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == id);
+
+            if (customJob == null)
+            {
+                return NotFound(new { success = false, message = "任务未找到" });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.CronExpression))
+            {
+                return BadRequest(new { success = false, message = "Cron表达式不能为空" });
+            }
+
+            // 验证Cron表达式
+            try
+            {
+                Cronos.CronExpression.Parse(request.CronExpression);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = "Cron表达式格式错误: " + ex.Message });
+            }
+
+            // 更新CustomJob的Cron表达式和调度设置
+            customJob.CronExpression = request.CronExpression;
+            customJob.EnableSchedule = true;
+            customJob.UpdatedAt = DateTime.UtcNow;
+            await _customJobService.UpdateCustomJobAsync(customJob);
+
+            // 添加到Hangfire定时任务
+            var recurringJobId = _hangfireJobService.ScheduleRecurringJob(id, request.CronExpression, request.Parameters);
+
+            _logger.LogInformation($"Recurring job scheduled for CustomJob {id}, RecurringJobId: {recurringJobId}, Cron: {request.CronExpression}");
+
+            return Ok(new
+            {
+                success = true,
+                message = "定时任务已添加到Hangfire",
+                recurringJobId = recurringJobId,
+                customJobId = id,
+                customJobName = customJob.Name,
+                cronExpression = request.CronExpression
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "添加定时任务失败");
+            return BadRequest(new { success = false, message = "添加失败: " + ex.Message });
+        }
+    }
+
+    // POST: /CustomJobs/StopSchedule/{id} - 停止定时任务
+    [HttpPost]
+    public async Task<IActionResult> StopSchedule(Guid id)
+    {
+        try
+        {
+            var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+            var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == id);
+
+            if (customJob == null)
+            {
+                return NotFound(new { success = false, message = "任务未找到" });
+            }
+
+            // 移除Hangfire定时任务
+            var recurringJobId = $"CustomJob_{id}";
+            _hangfireJobService.RemoveRecurringJob(recurringJobId);
+
+            // 更新CustomJob的调度设置
+            customJob.EnableSchedule = false;
+            customJob.UpdatedAt = DateTime.UtcNow;
+            await _customJobService.UpdateCustomJobAsync(customJob);
+
+            _logger.LogInformation($"Recurring job stopped for CustomJob {id}");
+
+            return Ok(new
+            {
+                success = true,
+                message = "定时任务已停止"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "停止定时任务失败");
+            return BadRequest(new { success = false, message = "停止失败: " + ex.Message });
+        }
+    }
+
+    public class ScheduleExecuteRequest
+    {
+        public string CronExpression { get; set; } = string.Empty;
+        public Dictionary<string, object>? Parameters { get; set; }
+    }
+
+    // GET: /CustomJobs/JobLogs?customJobId={id}
+    public async Task<IActionResult> JobLogs(Guid customJobId, int page = 1, int pageSize = 50)
+    {
+        var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+        var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == customJobId);
+
+        if (customJob == null)
+        {
+            return NotFound();
+        }
+
+        ViewData["CustomJob"] = customJob;
+        ViewData["Page"] = page;
+        ViewData["PageSize"] = pageSize;
+
+        return View();
+    }
+
+    // GET: /CustomJobs/GetJobLogs - AJAX接口
+    [HttpGet]
+    public async Task<IActionResult> GetJobLogs(Guid customJobId, int page = 1, int pageSize = 50)
+    {
+        try
+        {
+            var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+            var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == customJobId);
+
+            if (customJob == null)
+            {
+                return NotFound(new { success = false, message = "任务未找到" });
+            }
+
+            // 获取该CustomJob类型的所有WebJob及其日志
+            var logs = await _jobService.GetJobLogsByJobTypeAsync(customJob.JobType, page, pageSize);
+
+            return Ok(new
+            {
+                success = true,
+                logs = logs.Select(log => new
+                {
+                    logId = log.LogId,
+                    jobId = log.JobId,
+                    step = log.Step,
+                    level = log.Level,
+                    message = log.Message,
+                    details = log.Details,
+                    createdAt = log.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                    webJob = new
+                    {
+                        businessId = log.WebJob?.BusinessId,
+                        status = log.WebJob?.Status,
+                        description = log.WebJob?.Description
+                    }
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "获取日志失败");
+            return BadRequest(new { success = false, message = "获取日志失败: " + ex.Message });
         }
     }
 

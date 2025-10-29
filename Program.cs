@@ -91,6 +91,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddScoped<ICustomJobService, CustomJobService>();
 builder.Services.AddScoped<IJobExecutor, JobExecutor>();
+builder.Services.AddScoped<IHangfireJobService, HangfireJobService>();
 builder.Services.AddScoped<DetailedMigrationDiagnosticService>();
 
 var app = builder.Build();
