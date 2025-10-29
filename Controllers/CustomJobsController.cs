@@ -180,7 +180,7 @@ public class CustomJobsController : Controller
             );
 
             // 执行任务
-            await _jobExecutor.ExecuteJobAsync(webJob.JobId, customJob.JobType, parameters);
+            await _jobExecutor.ExecuteJobAsync(webJob.JobId);
 
             return Ok(new
             {
