@@ -13,15 +13,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 配置MySQL数据库连接
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// 配置MySQL数据库连接 - 使用HangfireConnection作为唯一数据库
+var hangfireConnectionString = builder.Configuration.GetConnectionString("HangfireConnection");
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 21));
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(connectionString, serverVersion));
+    options.UseMySql(hangfireConnectionString, serverVersion));
 
-// 配置Hangfire使用MySQL存储
-var hangfireConnectionString = builder.Configuration.GetConnectionString("HangfireConnection");
+// 配置Hangfire使用相同的MySQL数据库
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
     .UseSimpleAssemblyNameTypeSerializer()
@@ -96,11 +95,44 @@ app.MapControllers();
 // 映射SignalR Hub
 app.MapHub<JobProgressHub>("/hubs/job-progress");
 
-// 自动应用数据库迁移
+// 自动检查并创建数据库表
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    dbContext.Database.Migrate();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        logger.LogInformation("开始检查数据库状态...");
+
+        // 检查是否有待处理的迁移
+        var pendingMigrations = dbContext.Database.GetPendingMigrations().ToList();
+
+        if (pendingMigrations.Any())
+        {
+            // 如果有迁移文件，应用迁移
+            logger.LogInformation($"发现 {pendingMigrations.Count} 个待应用的迁移，正在应用...");
+            dbContext.Database.Migrate();
+            logger.LogInformation("数据库迁移应用成功");
+        }
+        else
+        {
+            // 如果没有迁移文件，确保数据库和表已创建
+            if (dbContext.Database.EnsureCreated())
+            {
+                logger.LogInformation("数据库和表创建成功");
+            }
+            else
+            {
+                logger.LogInformation("数据库和表已存在");
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "数据库初始化失败");
+        throw;
+    }
 }
 
 app.Run();
