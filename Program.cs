@@ -1,6 +1,9 @@
 using Hangfire;
 using Hangfire.MySql;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure.Internal;
+using Pomelo.EntityFrameworkCore.MySql.Internal;
 using WbtWebJob;
 using WbtWebJob.Data;
 using WbtWebJob.Hubs;
@@ -18,7 +21,18 @@ var hangfireConnectionString = builder.Configuration.GetConnectionString("Hangfi
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 21));
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(hangfireConnectionString, serverVersion));
+{
+    options.UseMySql(hangfireConnectionString, serverVersion, mySqlOptions =>
+    {
+       // mySqlOptions.MigrationsAssembly(typeof(Program).Assembly.GetName().Name);
+
+        // 其他 MySQL 特定配置
+        mySqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+    });
+});
 
 // 配置Hangfire使用相同的MySQL数据库
 builder.Services.AddHangfire(configuration => configuration
@@ -68,6 +82,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddScoped<ICustomJobService, CustomJobService>();
 builder.Services.AddScoped<IJobExecutor, JobExecutor>();
+builder.Services.AddScoped<DetailedMigrationDiagnosticService>();
 
 var app = builder.Build();
 
@@ -100,33 +115,16 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    //var test = scope.ServiceProvider.GetRequiredService<DetailedMigrationDiagnosticService>();
 
     try
     {
-        logger.LogInformation("开始检查数据库状态...");
-
-        // 检查是否有待处理的迁移
-        var pendingMigrations = dbContext.Database.GetPendingMigrations().ToList();
-
-        if (pendingMigrations.Any())
-        {
-            // 如果有迁移文件，应用迁移
-            logger.LogInformation($"发现 {pendingMigrations.Count} 个待应用的迁移，正在应用...");
-            dbContext.Database.Migrate();
-            logger.LogInformation("数据库迁移应用成功");
-        }
-        else
-        {
-            // 如果没有迁移文件，确保数据库和表已创建
-            if (dbContext.Database.EnsureCreated())
-            {
-                logger.LogInformation("数据库和表创建成功");
-            }
-            else
-            {
-                logger.LogInformation("数据库和表已存在");
-            }
-        }
+        //await test.FullDiagnosisAsync();
+        logger.LogInformation("开始检查数据库状态...");       
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();      
+        //var list2 = db.Database.GetPendingMigrations();
+        db.Database.Migrate();
+        logger.LogInformation("升级数据库完成.");
     }
     catch (Exception ex)
     {

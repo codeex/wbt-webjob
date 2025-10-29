@@ -1,11 +1,15 @@
-using System;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using System;
+using WbtWebJob.Data;
 
 #nullable disable
 
 namespace WbtWebJob.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20250101000000_InitialCreate_WebJob_JobLog_CustomJob")]
     public partial class InitialCreate_WebJob_JobLog_CustomJob : Migration
     {
         /// <inheritdoc />
