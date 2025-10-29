@@ -12,7 +12,8 @@ using WbtWebJob.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // 添加服务到容器
-builder.Services.AddControllers();
+builder.Services.AddControllersWithViews();
+builder.Services.AddRazorPages();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -95,7 +96,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseStaticFiles();
+
 app.UseCors();
+
+app.UseRouting();
 
 app.UseAuthorization();
 
@@ -105,7 +110,13 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
     Authorization = new[] { new HangfireAuthorizationFilter() }
 });
 
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=CustomJobs}/{action=Index}/{id?}");
+
 app.MapControllers();
+
+app.MapRazorPages();
 
 // 映射SignalR Hub
 app.MapHub<JobProgressHub>("/hubs/job-progress");

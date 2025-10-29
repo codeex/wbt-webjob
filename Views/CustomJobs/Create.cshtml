@@ -1,0 +1,162 @@
+@model WbtWebJob.Models.CustomJob
+
+@{
+    ViewData["Title"] = "创建定制任务";
+}
+
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="bi bi-plus-circle"></i> 创建定制任务
+        </h2>
+    </div>
+    <div class="col text-end">
+        <a href="@Url.Action("Index")" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form asp-action="Create" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="row">
+                <!-- 基本信息 -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">基本信息</h5>
+
+                    <div class="mb-3">
+                        <label asp-for="JobType" class="form-label">
+                            任务类型 <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="JobType" class="form-control" placeholder="例如: DataSync, EmailSender" required />
+                        <span asp-validation-for="JobType" class="text-danger"></span>
+                        <small class="text-muted">用于标识任务的唯一类型，建议使用英文</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Name" class="form-label">
+                            任务名称 <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="Name" class="form-control" placeholder="例如: 数据同步任务" required />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Description" class="form-label">任务描述</label>
+                        <textarea asp-for="Description" class="form-control" rows="3" placeholder="描述任务的用途和功能"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="IsActive" class="form-check-label">启用任务</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HTTP 配置 -->
+                <div class="col-md-6">
+                    <h5 class="mb-3">HTTP 配置</h5>
+
+                    <div class="mb-3">
+                        <label asp-for="HttpUrl" class="form-label">
+                            HTTP URL <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="HttpUrl" class="form-control" type="url" placeholder="https://api.example.com/endpoint" required />
+                        <span asp-validation-for="HttpUrl" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="HttpMethod" class="form-label">
+                            HTTP 方法 <span class="text-danger">*</span>
+                        </label>
+                        <select asp-for="HttpMethod" class="form-select" required>
+                            <option value="GET">GET</option>
+                            <option value="POST" selected>POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="PATCH">PATCH</option>
+                        </select>
+                        <span asp-validation-for="HttpMethod" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="AuthType" class="form-label">认证类型</label>
+                        <select asp-for="AuthType" class="form-select">
+                            <option value="">无</option>
+                            <option value="Basic">Basic Auth</option>
+                            <option value="Bearer">Bearer Token</option>
+                            <option value="ApiKey">API Key</option>
+                        </select>
+                        <span asp-validation-for="AuthType" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="AuthConfig" class="form-label">认证配置 (JSON)</label>
+                        <textarea asp-for="AuthConfig" class="form-control" rows="3" placeholder='{"username": "user", "password": "pass"}'></textarea>
+                        <span asp-validation-for="AuthConfig" class="text-danger"></span>
+                        <small class="text-muted">JSON格式的认证配置信息</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 高级配置 -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h5 class="mb-3">高级配置</h5>
+
+                    <div class="mb-3">
+                        <label asp-for="Headers" class="form-label">HTTP Headers (JSON)</label>
+                        <textarea asp-for="Headers" class="form-control" rows="3" placeholder='{"Content-Type": "application/json", "X-Custom-Header": "value"}'></textarea>
+                        <span asp-validation-for="Headers" class="text-danger"></span>
+                        <small class="text-muted">自定义HTTP请求头，JSON格式</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="DefaultParameters" class="form-label">默认参数 (JSON)</label>
+                        <textarea asp-for="DefaultParameters" class="form-control" rows="3" placeholder='{"param1": "value1", "param2": "value2"}'></textarea>
+                        <span asp-validation-for="DefaultParameters" class="text-danger"></span>
+                        <small class="text-muted">任务执行时的默认参数，JSON格式</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> 创建任务
+                    </button>
+                    <a href="@Url.Action("Index")" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> 取消
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        // JSON 格式验证
+        $('textarea[id$="AuthConfig"], textarea[id$="Headers"], textarea[id$="DefaultParameters"]').on('blur', function() {
+            const value = $(this).val().trim();
+            if (value && value !== '') {
+                try {
+                    JSON.parse(value);
+                    $(this).removeClass('is-invalid').addClass('is-valid');
+                } catch (e) {
+                    $(this).removeClass('is-valid').addClass('is-invalid');
+                    alert('JSON 格式错误: ' + e.message);
+                }
+            } else {
+                $(this).removeClass('is-invalid is-valid');
+            }
+        });
+    </script>
+}

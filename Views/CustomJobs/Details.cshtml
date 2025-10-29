@@ -1,0 +1,217 @@
+@model WbtWebJob.Models.CustomJob
+
+@{
+    ViewData["Title"] = "任务详情";
+}
+
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="bi bi-eye"></i> 任务详情
+        </h2>
+    </div>
+    <div class="col text-end">
+        <a href="@Url.Action("Index")" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+        <a href="@Url.Action("Edit", new { id = Model.CustomJobId })" class="btn btn-warning">
+            <i class="bi bi-pencil"></i> 编辑
+        </a>
+        @if (Model.IsActive)
+        {
+            <button type="button" class="btn btn-success" id="executeBtn">
+                <i class="bi bi-play-fill"></i> 执行任务
+            </button>
+        }
+    </div>
+</div>
+
+<div class="row">
+    <!-- 基本信息卡片 -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle"></i> 基本信息
+                </h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">任务ID:</dt>
+                    <dd class="col-sm-8"><code>@Model.CustomJobId</code></dd>
+
+                    <dt class="col-sm-4">任务类型:</dt>
+                    <dd class="col-sm-8"><code>@Model.JobType</code></dd>
+
+                    <dt class="col-sm-4">任务名称:</dt>
+                    <dd class="col-sm-8">@Model.Name</dd>
+
+                    <dt class="col-sm-4">状态:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge @(Model.IsActive ? "bg-success" : "bg-secondary")">
+                            @(Model.IsActive ? "已启用" : "已禁用")
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-4">描述:</dt>
+                    <dd class="col-sm-8">@(Model.Description ?? "-")</dd>
+
+                    <dt class="col-sm-4">创建时间:</dt>
+                    <dd class="col-sm-8">@Model.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</dd>
+
+                    @if (Model.UpdatedAt.HasValue)
+                    {
+                        <dt class="col-sm-4">更新时间:</dt>
+                        <dd class="col-sm-8">@Model.UpdatedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- HTTP 配置卡片 -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-globe"></i> HTTP 配置
+                </h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">HTTP URL:</dt>
+                    <dd class="col-sm-8">
+                        <a href="@Model.HttpUrl" target="_blank" class="text-break">@Model.HttpUrl</a>
+                    </dd>
+
+                    <dt class="col-sm-4">HTTP 方法:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-info">@Model.HttpMethod</span>
+                    </dd>
+
+                    <dt class="col-sm-4">认证类型:</dt>
+                    <dd class="col-sm-8">
+                        @if (string.IsNullOrEmpty(Model.AuthType))
+                        {
+                            <span class="text-muted">无</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark">@Model.AuthType</span>
+                        }
+                    </dd>
+
+                    @if (!string.IsNullOrEmpty(Model.AuthConfig))
+                    {
+                        <dt class="col-sm-4">认证配置:</dt>
+                        <dd class="col-sm-8">
+                            <pre class="bg-light p-2 rounded" style="max-height: 150px; overflow-y: auto;"><code>@Model.AuthConfig</code></pre>
+                        </dd>
+                    }
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- HTTP Headers 卡片 -->
+    @if (!string.IsNullOrEmpty(Model.Headers))
+    {
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark-code"></i> HTTP Headers
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;"><code>@Model.Headers</code></pre>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- 默认参数卡片 -->
+    @if (!string.IsNullOrEmpty(Model.DefaultParameters))
+    {
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-gear"></i> 默认参数
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;"><code>@Model.DefaultParameters</code></pre>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- 执行任务参数模态框 -->
+<div class="modal fade" id="executeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">执行任务: @Model.Name</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">任务参数 (JSON格式，可选)</label>
+                    <textarea class="form-control" id="executeParameters" rows="8" placeholder='{"key": "value"}'>@Model.DefaultParameters</textarea>
+                    <small class="text-muted">请输入有效的JSON格式参数，默认值已填充（如有）</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" id="confirmExecute">
+                    <i class="bi bi-play-fill"></i> 确认执行
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // 执行任务
+        $('#executeBtn').click(function() {
+            $('#executeModal').modal('show');
+        });
+
+        $('#confirmExecute').click(function() {
+            const parametersText = $('#executeParameters').val().trim();
+            let parameters = null;
+
+            if (parametersText) {
+                try {
+                    parameters = JSON.parse(parametersText);
+                } catch (e) {
+                    alert('参数格式错误，请输入有效的JSON格式: ' + e.message);
+                    return;
+                }
+            }
+
+            const btn = $(this);
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 执行中...');
+
+            $.ajax({
+                url: '/CustomJobs/Execute/@Model.CustomJobId',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(parameters),
+                success: function(response) {
+                    alert('任务提交成功！\n\n任务ID: ' + response.jobId + '\n业务ID: ' + response.businessId + '\n\n请到 Hangfire 控制台查看执行状态。');
+                    $('#executeModal').modal('hide');
+                },
+                error: function(xhr) {
+                    alert('执行失败: ' + (xhr.responseJSON?.message || '未知错误'));
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html('<i class="bi bi-play-fill"></i> 确认执行');
+                }
+            });
+        });
+    </script>
+}
