@@ -1,6 +1,7 @@
 using Hangfire;
 using Hangfire.MySql;
 using Microsoft.EntityFrameworkCore;
+using WbtWebJob;
 using WbtWebJob.Data;
 using WbtWebJob.Hubs;
 using WbtWebJob.Services;
