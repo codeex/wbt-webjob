@@ -322,7 +322,11 @@ class WorkflowEditor {
         if (toggleFullscreenBtn) {
             toggleFullscreenBtn.addEventListener('click', () => {
                 const editorContainer = document.getElementById('workflowEditorContainer');
+                const toolbar = document.querySelector('.editor-main-toolbar');
                 editorContainer.classList.toggle('fullscreen');
+                if (toolbar) {
+                    toolbar.classList.toggle('fullscreen');
+                }
                 setTimeout(() => {
                     const container = document.getElementById('workflowCanvas');
                     if (this.lf && container) {
@@ -471,7 +475,7 @@ class WorkflowEditor {
             type: nodeType,
             x: x,
             y: y,
-            text: nodeName,
+            text: '',
             properties: {
                 nodeId: nodeId,
                 nodeType: nodeType,
@@ -723,11 +727,18 @@ class WorkflowEditor {
             }
             nodeData.properties.nodeName = value;
             nodeData.properties.label = value;
-            this.lf.updateText(nodeData.id, value);
         }
 
         // 更新节点模型
         this.lf.setProperties(nodeData.id, nodeData.properties);
+
+        // 强制重新渲染节点以更新显示
+        if (key === 'name') {
+            const nodeModel = this.lf.getNodeModelById(nodeData.id);
+            if (nodeModel && nodeModel.updateData) {
+                nodeModel.updateData({ properties: nodeData.properties });
+            }
+        }
     }
 
     deleteSelected() {

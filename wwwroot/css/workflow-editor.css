@@ -37,7 +37,7 @@
 /* 工作流编辑器容器 */
 .workflow-editor-container {
     display: flex;
-    height: calc(100vh - 200px);
+    height: calc(100vh - 120px);
     min-height: 600px;
     border: 1px solid #ddd;
     border-radius: 4px;
@@ -47,12 +47,22 @@
 }
 
 /* 全屏模式 */
-.workflow-editor-container.fullscreen {
+.editor-main-toolbar.fullscreen {
     position: fixed;
     top: 0;
     left: 0;
+    right: 0;
+    z-index: 10000;
+    margin-bottom: 0;
+    border-radius: 0;
+}
+
+.workflow-editor-container.fullscreen {
+    position: fixed;
+    top: 60px;
+    left: 0;
     width: 100vw !important;
-    height: 100vh !important;
+    height: calc(100vh - 60px) !important;
     z-index: 9999;
     border-radius: 0;
     border: none;
