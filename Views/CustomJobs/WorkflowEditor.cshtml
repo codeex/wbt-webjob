@@ -17,10 +17,15 @@
                     <i class="bi bi-download"></i> 导出
                 </button>
                 <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#" id="exportJsonBtn"><i class="bi bi-filetype-json"></i> 导出JSON</a></li>
                     <li><a class="dropdown-item" href="#" id="exportPngBtn"><i class="bi bi-file-image"></i> 导出PNG</a></li>
                     <li><a class="dropdown-item" href="#" id="exportSvgBtn"><i class="bi bi-file-earmark-code"></i> 导出SVG</a></li>
                 </ul>
             </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="importJsonBtn" title="导入JSON">
+                <i class="bi bi-upload"></i> 导入
+            </button>
+            <input type="file" id="importJsonFileInput" accept=".json" style="display: none;" />
             <a asp-action="Index" class="btn btn-sm btn-outline-secondary" title="返回列表">
                 <i class="bi bi-arrow-left"></i>
             </a>
@@ -193,6 +198,26 @@
                     <p>请选择一个节点以编辑其属性</p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="workflow-status-bar" id="statusBar">
+        <div class="status-item">
+            <i class="bi bi-info-circle"></i>
+            <span id="statusMessage">就绪</span>
+        </div>
+        <div class="status-item">
+            <i class="bi bi-diagram-3"></i>
+            <span id="nodeCount">节点: 0</span>
+        </div>
+        <div class="status-item">
+            <i class="bi bi-arrow-left-right"></i>
+            <span id="edgeCount">连接: 0</span>
+        </div>
+        <div class="status-item status-validation" id="validationStatus">
+            <i class="bi bi-check-circle-fill text-success"></i>
+            <span>DAG验证: 通过</span>
         </div>
     </div>
 </div>

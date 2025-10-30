@@ -404,3 +404,65 @@
 .panel-body::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+/* 状态栏样式 */
+.workflow-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #495057;
+    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.workflow-status-bar .status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-right: 1px solid #dee2e6;
+}
+
+.workflow-status-bar .status-item:last-child {
+    border-right: none;
+}
+
+.workflow-status-bar .status-item i {
+    font-size: 14px;
+}
+
+.workflow-status-bar .status-validation {
+    font-weight: 500;
+}
+
+.workflow-status-bar .status-validation.error {
+    color: #dc3545;
+}
+
+.workflow-status-bar .status-validation.warning {
+    color: #ffc107;
+}
+
+.workflow-status-bar .status-validation.success {
+    color: #28a745;
+}
+
+/* 状态栏错误详情 */
+.validation-errors {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.validation-errors:hover {
+    overflow: visible;
+    white-space: normal;
+    position: relative;
+    z-index: 1000;
+}

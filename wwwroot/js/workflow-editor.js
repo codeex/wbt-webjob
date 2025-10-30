@@ -362,6 +362,10 @@ class WorkflowEditor {
         document.getElementById('createGroupBtn')?.addEventListener('click', () => this.createGroup());
 
         // 导出功能
+        document.getElementById('exportJsonBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.exportToJson();
+        });
         document.getElementById('exportPngBtn')?.addEventListener('click', (e) => {
             e.preventDefault();
             this.exportToPng();
@@ -369,6 +373,14 @@ class WorkflowEditor {
         document.getElementById('exportSvgBtn')?.addEventListener('click', (e) => {
             e.preventDefault();
             this.exportToSvg();
+        });
+
+        // 导入功能
+        document.getElementById('importJsonBtn')?.addEventListener('click', () => {
+            document.getElementById('importJsonFileInput').click();
+        });
+        document.getElementById('importJsonFileInput')?.addEventListener('change', (e) => {
+            this.importFromJson(e);
         });
 
         // 小地图切换
@@ -460,6 +472,13 @@ class WorkflowEditor {
                     this.hideProperties();
                 }
             });
+
+            // 监听图变化，实时验证和更新状态栏
+            this.lf.on('node:add', () => this.updateStatusBar());
+            this.lf.on('node:delete', () => this.updateStatusBar());
+            this.lf.on('edge:add', () => this.updateStatusBar());
+            this.lf.on('edge:delete', () => this.updateStatusBar());
+            this.lf.on('node:dnd-add', () => this.updateStatusBar());
         }
     }
 
@@ -1223,11 +1242,420 @@ class WorkflowEditor {
                 this.lf.render({ nodes, edges });
                 setTimeout(() => {
                     this.fitToScreen();
+                    this.updateStatusBar();
                 }, 100);
             })
             .catch(error => {
                 console.error('加载错误:', error);
             });
+    }
+
+    // 导出为JSON
+    exportToJson() {
+        try {
+            const graphData = this.lf.getGraphData();
+
+            // 构建JSON数据，包含完整的节点和连接线信息
+            const workflowJson = {
+                version: '1.0',
+                exportTime: new Date().toISOString(),
+                metadata: {
+                    nodeCount: graphData.nodes.length,
+                    edgeCount: graphData.edges.length
+                },
+                nodes: graphData.nodes.map(node => ({
+                    id: node.id,
+                    type: node.type,
+                    position: {
+                        x: node.x,
+                        y: node.y
+                    },
+                    text: node.text?.value || node.text || '',
+                    properties: {
+                        nodeId: node.properties?.nodeId || node.id,
+                        nodeType: node.properties?.nodeType || node.type,
+                        nodeName: node.properties?.nodeName || '',
+                        label: node.properties?.label || '',
+                        icon: node.properties?.icon || '',
+                        color: node.properties?.color || '',
+                        configuration: node.properties?.configuration || {}
+                    }
+                })),
+                edges: graphData.edges.map(edge => ({
+                    id: edge.id,
+                    type: edge.type,
+                    sourceNodeId: edge.sourceNodeId,
+                    targetNodeId: edge.targetNodeId,
+                    sourceAnchorId: edge.sourceAnchorId || 'default',
+                    targetAnchorId: edge.targetAnchorId || 'default',
+                    text: edge.text?.value || edge.text || '',
+                    properties: edge.properties || {}
+                }))
+            };
+
+            // 下载JSON文件
+            const jsonStr = JSON.stringify(workflowJson, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `workflow-${new Date().getTime()}.json`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+
+            this.setStatusMessage('JSON导出成功', 'success');
+        } catch (error) {
+            console.error('导出JSON失败:', error);
+            alert('导出JSON失败: ' + error.message);
+            this.setStatusMessage('JSON导出失败', 'error');
+        }
+    }
+
+    // 导入JSON
+    importFromJson(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const workflowJson = JSON.parse(e.target.result);
+
+                // 验证JSON格式
+                if (!workflowJson.nodes || !workflowJson.edges) {
+                    throw new Error('无效的JSON格式：缺少nodes或edges字段');
+                }
+
+                // 清空当前画布（可选，可以询问用户）
+                if (this.lf.getGraphData().nodes.length > 0) {
+                    if (!confirm('导入将清空当前画布，是否继续？')) {
+                        return;
+                    }
+                }
+
+                // 准备节点数据
+                const nodes = workflowJson.nodes.map(node => {
+                    // 更新节点计数器
+                    const idNum = parseInt(node.id.replace('node_', ''));
+                    if (!isNaN(idNum) && idNum > this.nodeIdCounter) {
+                        this.nodeIdCounter = idNum;
+                    }
+
+                    return {
+                        id: node.id,
+                        type: node.type,
+                        x: node.position?.x || node.x || 0,
+                        y: node.position?.y || node.y || 0,
+                        text: node.text || '',
+                        properties: node.properties || {}
+                    };
+                });
+
+                // 准备连接线数据
+                const edges = workflowJson.edges.map(edge => {
+                    // 更新连接线计数器
+                    const idNum = parseInt(edge.id.replace('conn_', ''));
+                    if (!isNaN(idNum) && idNum > this.connectionIdCounter) {
+                        this.connectionIdCounter = idNum;
+                    }
+
+                    return {
+                        id: edge.id,
+                        type: edge.type || 'polyline',
+                        sourceNodeId: edge.sourceNodeId,
+                        targetNodeId: edge.targetNodeId,
+                        sourceAnchorId: edge.sourceAnchorId || 'default',
+                        targetAnchorId: edge.targetAnchorId || 'default',
+                        text: edge.text || '',
+                        properties: edge.properties || {}
+                    };
+                });
+
+                // 渲染图
+                this.lf.render({ nodes, edges });
+
+                // 适应屏幕
+                setTimeout(() => {
+                    this.fitToScreen();
+                    this.updateStatusBar();
+                }, 100);
+
+                this.setStatusMessage('JSON导入成功', 'success');
+                alert('工作流导入成功！');
+            } catch (error) {
+                console.error('导入JSON失败:', error);
+                alert('导入JSON失败: ' + error.message);
+                this.setStatusMessage('JSON导入失败', 'error');
+            }
+        };
+
+        reader.readAsText(file);
+        // 重置文件输入，允许重复导入同一文件
+        event.target.value = '';
+    }
+
+    // DAG验证
+    validateDAG() {
+        const graphData = this.lf.getGraphData();
+        const errors = [];
+        const warnings = [];
+
+        // 1. 检查是否有节点
+        if (graphData.nodes.length === 0) {
+            return {
+                valid: true,
+                errors: [],
+                warnings: ['画布为空']
+            };
+        }
+
+        // 2. 检查是否有开始节点
+        const startNodes = graphData.nodes.filter(n =>
+            (n.properties?.nodeType || n.type) === 'start'
+        );
+        if (startNodes.length === 0) {
+            errors.push('缺少开始节点');
+        } else if (startNodes.length > 1) {
+            warnings.push('存在多个开始节点');
+        }
+
+        // 3. 检查是否有结束节点
+        const endNodes = graphData.nodes.filter(n =>
+            (n.properties?.nodeType || n.type) === 'end'
+        );
+        if (endNodes.length === 0) {
+            warnings.push('缺少结束节点');
+        }
+
+        // 4. 检查孤立节点（没有连接的节点）
+        const nodeIds = new Set(graphData.nodes.map(n => n.id));
+        const connectedNodes = new Set();
+        graphData.edges.forEach(edge => {
+            connectedNodes.add(edge.sourceNodeId);
+            connectedNodes.add(edge.targetNodeId);
+        });
+
+        const isolatedNodes = [];
+        nodeIds.forEach(id => {
+            if (!connectedNodes.has(id)) {
+                const node = graphData.nodes.find(n => n.id === id);
+                isolatedNodes.push(node.properties?.nodeName || id);
+            }
+        });
+
+        if (isolatedNodes.length > 0) {
+            warnings.push(`存在${isolatedNodes.length}个孤立节点: ${isolatedNodes.join(', ')}`);
+        }
+
+        // 5. 检查循环（使用DFS检测环）
+        const hasCycle = this.detectCycle(graphData);
+        if (hasCycle) {
+            errors.push('检测到循环依赖，这不是有效的DAG');
+        }
+
+        // 6. 检查节点配置完整性
+        graphData.nodes.forEach(node => {
+            const nodeType = node.properties?.nodeType || node.type;
+            const config = node.properties?.configuration || {};
+            const nodeName = node.properties?.nodeName || node.id;
+
+            // 检查节点名称
+            if (!config.name || config.name.trim() === '') {
+                warnings.push(`节点"${nodeName}"缺少名称配置`);
+            }
+
+            // 根据节点类型检查特定配置
+            switch (nodeType) {
+                case 'trigger':
+                    if (!config.cronExpression) {
+                        warnings.push(`触发器节点"${nodeName}"缺少Cron表达式`);
+                    }
+                    break;
+                case 'event':
+                    if (!config.eventTopic) {
+                        warnings.push(`事件节点"${nodeName}"缺少事件主题`);
+                    }
+                    break;
+                case 'httpAuth':
+                case 'httpAction':
+                    if (!config.url && !config.authUrl) {
+                        warnings.push(`HTTP节点"${nodeName}"缺少URL配置`);
+                    }
+                    break;
+                case 'commandLine':
+                    if (!config.command) {
+                        warnings.push(`命令行节点"${nodeName}"缺少命令配置`);
+                    }
+                    break;
+                case 'condition':
+                    if (!config.conditionExpression) {
+                        warnings.push(`条件节点"${nodeName}"缺少条件表达式`);
+                    }
+                    break;
+            }
+        });
+
+        // 7. 检查死端（没有出边的非结束节点）
+        const nodesWithoutOutEdges = [];
+        graphData.nodes.forEach(node => {
+            const nodeType = node.properties?.nodeType || node.type;
+            if (nodeType !== 'end') {
+                const hasOutEdge = graphData.edges.some(e => e.sourceNodeId === node.id);
+                if (!hasOutEdge) {
+                    nodesWithoutOutEdges.push(node.properties?.nodeName || node.id);
+                }
+            }
+        });
+
+        if (nodesWithoutOutEdges.length > 0) {
+            warnings.push(`存在${nodesWithoutOutEdges.length}个死端节点: ${nodesWithoutOutEdges.join(', ')}`);
+        }
+
+        return {
+            valid: errors.length === 0,
+            errors,
+            warnings
+        };
+    }
+
+    // 使用DFS检测循环
+    detectCycle(graphData) {
+        const graph = new Map();
+        const visited = new Set();
+        const recStack = new Set();
+
+        // 构建邻接表
+        graphData.nodes.forEach(node => {
+            graph.set(node.id, []);
+        });
+
+        graphData.edges.forEach(edge => {
+            if (graph.has(edge.sourceNodeId)) {
+                graph.get(edge.sourceNodeId).push(edge.targetNodeId);
+            }
+        });
+
+        // DFS检测环
+        const dfs = (nodeId) => {
+            visited.add(nodeId);
+            recStack.add(nodeId);
+
+            const neighbors = graph.get(nodeId) || [];
+            for (const neighbor of neighbors) {
+                if (!visited.has(neighbor)) {
+                    if (dfs(neighbor)) {
+                        return true;
+                    }
+                } else if (recStack.has(neighbor)) {
+                    return true; // 发现环
+                }
+            }
+
+            recStack.delete(nodeId);
+            return false;
+        };
+
+        // 检查所有节点
+        for (const nodeId of graph.keys()) {
+            if (!visited.has(nodeId)) {
+                if (dfs(nodeId)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // 更新状态栏
+    updateStatusBar() {
+        const graphData = this.lf.getGraphData();
+
+        // 更新节点和连接数
+        const nodeCountEl = document.getElementById('nodeCount');
+        if (nodeCountEl) {
+            nodeCountEl.textContent = `节点: ${graphData.nodes.length}`;
+        }
+
+        const edgeCountEl = document.getElementById('edgeCount');
+        if (edgeCountEl) {
+            edgeCountEl.textContent = `连接: ${graphData.edges.length}`;
+        }
+
+        // 验证DAG
+        const validation = this.validateDAG();
+        const validationStatusEl = document.getElementById('validationStatus');
+
+        if (validationStatusEl) {
+            validationStatusEl.className = 'status-item status-validation';
+
+            if (validation.valid) {
+                if (validation.warnings.length > 0) {
+                    validationStatusEl.classList.add('warning');
+                    validationStatusEl.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span title="${validation.warnings.join('\n')}">
+                            DAG验证: 通过 (${validation.warnings.length}个警告)
+                        </span>
+                    `;
+                } else {
+                    validationStatusEl.classList.add('success');
+                    validationStatusEl.innerHTML = `
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>DAG验证: 通过</span>
+                    `;
+                }
+            } else {
+                validationStatusEl.classList.add('error');
+                validationStatusEl.innerHTML = `
+                    <i class="bi bi-x-circle-fill"></i>
+                    <span title="${validation.errors.join('\n')}">
+                        DAG验证: 失败 (${validation.errors.length}个错误)
+                    </span>
+                `;
+            }
+        }
+
+        // 更新状态消息
+        if (graphData.nodes.length === 0) {
+            this.setStatusMessage('画布为空', 'info');
+        } else {
+            this.setStatusMessage('就绪', 'info');
+        }
+    }
+
+    // 设置状态消息
+    setStatusMessage(message, type = 'info') {
+        const statusMessageEl = document.getElementById('statusMessage');
+        if (statusMessageEl) {
+            statusMessageEl.textContent = message;
+
+            // 根据类型设置图标
+            const iconEl = statusMessageEl.previousElementSibling;
+            if (iconEl && iconEl.tagName === 'I') {
+                iconEl.className = 'bi ';
+                switch (type) {
+                    case 'success':
+                        iconEl.className += 'bi-check-circle-fill text-success';
+                        break;
+                    case 'error':
+                        iconEl.className += 'bi-x-circle-fill text-danger';
+                        break;
+                    case 'warning':
+                        iconEl.className += 'bi-exclamation-triangle-fill text-warning';
+                        break;
+                    default:
+                        iconEl.className += 'bi-info-circle';
+                }
+            }
+        }
+
+        // 如果是成功或错误消息，3秒后恢复为"就绪"
+        if (type === 'success' || type === 'error') {
+            setTimeout(() => {
+                this.setStatusMessage('就绪', 'info');
+            }, 3000);
+        }
     }
 }
 
