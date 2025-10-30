@@ -236,34 +236,62 @@ class WorkflowEditor {
         const halfWidth = nodeWidth / 2;
         const halfHeight = nodeHeight / 2;
 
-        // 输入点（除了输入组，其他都有） - 在左边边缘
-        if (category !== 'input') {
-            const inputPort = new fabric.Circle({
+        // 输入点（除了输入组，其他都有） - 在右边边缘
+        if (category == 'input') {
+            const outputPort = new fabric.Circle({
                 radius: 6,
                 fill: '#fff',
                 stroke: '#333',
                 strokeWidth: 2,
-                left: -halfWidth,  // 左边缘
-                top: 0,
+                left: group.get("left") + nodeWidth,
+                top: group.get("top") + halfHeight,   // 右边缘
                 originX: 'center',
                 originY: 'center',
                 portType: 'input',
                 selectable: false
             });
+            group.addWithUpdate(outputPort);
+        }
+        else if (category == 'terminate') {
+            const inputPort = new fabric.Circle({
+                radius: 6,
+                fill: '#fff',
+                stroke: '#333',
+                strokeWidth: 2,
+                left: group.get("left"),
+                top: group.get("top") + halfHeight,
+                originX: 'center',
+                originY: 'center',
+                portType: 'output',
+                selectable: false
+            });
             group.addWithUpdate(inputPort);
         }
+        // 输出点 - 在左边边缘
+        else {
+            const inputPort = new fabric.Circle({
+                radius: 6,
+                fill: '#fff',
+                stroke: '#333',
+                strokeWidth: 2,
+                left: group.get("left"),
+                top: group.get("top") + halfHeight,
+                originX: 'center',
+                originY: 'center',
+                portType: 'output',
+                selectable: false
+            });
+            group.addWithUpdate(inputPort);
 
-        // 输出点 - 在右边边缘
-        if (category !== 'terminate') {
-            if (nodeType === 'condition') {
+            if (nodeType == 'condition') {
                 // 条件节点有两个输出：真和假
                 const truePort = new fabric.Circle({
                     radius: 6,
                     fill: '#28a745',
                     stroke: '#333',
                     strokeWidth: 2,
-                    left: halfWidth,  // 右边缘
-                    top: -halfHeight / 2,
+                    left: group.get("left") + nodeWidth + 6,  // 右边缘
+                    top: group.get("top") + halfHeight / 2,
                     originX: 'center',
                     originY: 'center',
                     portType: 'output',
@@ -276,8 +304,8 @@ class WorkflowEditor {
                     fill: '#dc3545',
                     stroke: '#333',
                     strokeWidth: 2,
-                    left: halfWidth,  // 右边缘
-                    top: halfHeight / 2,
+                    left: group.get("left") + nodeWidth +6,  // 右边缘
+                    top: group.get("top") + 3*halfHeight / 2,
                     originX: 'center',
                     originY: 'center',
                     portType: 'output',
@@ -287,23 +315,24 @@ class WorkflowEditor {
 
                 group.addWithUpdate(truePort);
                 group.addWithUpdate(falsePort);
-            } else {
-                // 普通输出点
+            }
+            else {
                 const outputPort = new fabric.Circle({
                     radius: 6,
                     fill: '#fff',
                     stroke: '#333',
                     strokeWidth: 2,
-                    left: halfWidth,  // 右边缘
-                    top: 0,
+                    left: group.get("left") + nodeWidth +6,
+                    top: group.get("top") + halfHeight,   // 右边缘
                     originX: 'center',
                     originY: 'center',
-                    portType: 'output',
+                    portType: 'input',
                     selectable: false
                 });
                 group.addWithUpdate(outputPort);
             }
-        }
+        }        
+        
     }
 
     getDefaultConfiguration(nodeType) {
@@ -330,7 +359,7 @@ class WorkflowEditor {
         const pointer = this.canvas.getPointer(e.e);
         const port = this.findPortAtPosition(target, pointer);
 
-        if (port && port.portType === 'output') {
+        if (port && port.portType !== 'output') {
             if (!this.connectingFrom) {
                 // 开始连接
                 this.connectingFrom = {
@@ -338,7 +367,7 @@ class WorkflowEditor {
                     port: port.portName || 'default'
                 };
             }
-        } else if (port && port.portType === 'input') {
+        } else if (port && port.portType !== 'input') {
             if (this.connectingFrom) {
                 // 完成连接
                 this.createConnection(
