@@ -1,0 +1,171 @@
+@model WbtWebJob.Models.CustomJob
+@{
+    ViewData["Title"] = Model?.CustomJobId != Guid.Empty ? "编辑工作流" : "创建工作流";
+    var isEdit = Model?.CustomJobId != Guid.Empty;
+}
+
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>@ViewData["Title"]</h2>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" id="saveWorkflowBtn">
+                <i class="fas fa-save"></i> 保存工作流
+            </button>
+            <a asp-action="Index" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> 返回列表
+            </a>
+        </div>
+    </div>
+
+    <!-- 工作流基本信息 -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="workflowName">工作流名称</label>
+                        <input type="text" class="form-control" id="workflowName"
+                               value="@Model?.Name" placeholder="请输入工作流名称" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="workflowJobType">任务类型</label>
+                        <input type="text" class="form-control" id="workflowJobType"
+                               value="@Model?.JobType" placeholder="请输入任务类型标识" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="workflowDescription">描述</label>
+                        <input type="text" class="form-control" id="workflowDescription"
+                               value="@Model?.Description" placeholder="请输入工作流描述">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 三栏布局 -->
+    <div class="workflow-editor-container">
+        <!-- 左侧工具栏 -->
+        <div class="workflow-left-panel" id="leftPanel">
+            <div class="panel-header">
+                <h5>组件工具箱</h5>
+                <button class="btn btn-sm btn-link" id="toggleLeftPanel">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+            <div class="panel-body">
+                <!-- 操作组 -->
+                <div class="component-group">
+                    <div class="group-title">操作工具</div>
+                    <div class="component-item" data-node-type="select" data-category="action">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <span>选择</span>
+                    </div>
+                    <div class="component-item" data-node-type="connect" data-category="action">
+                        <i class="fas fa-link"></i>
+                        <span>连接</span>
+                    </div>
+                </div>
+
+                <!-- 输入组 -->
+                <div class="component-group">
+                    <div class="group-title">输入节点</div>
+                    <div class="component-item draggable" data-node-type="start" data-category="input">
+                        <i class="fas fa-play-circle"></i>
+                        <span>开始</span>
+                    </div>
+                    <div class="component-item draggable" data-node-type="trigger" data-category="input">
+                        <i class="fas fa-clock"></i>
+                        <span>触发器</span>
+                    </div>
+                    <div class="component-item draggable" data-node-type="event" data-category="input">
+                        <i class="fas fa-bell"></i>
+                        <span>事件</span>
+                    </div>
+                </div>
+
+                <!-- 处理组 -->
+                <div class="component-group">
+                    <div class="group-title">处理节点</div>
+                    <div class="component-item draggable" data-node-type="httpAuth" data-category="process">
+                        <i class="fas fa-key"></i>
+                        <span>HTTP授权</span>
+                    </div>
+                    <div class="component-item draggable" data-node-type="httpAction" data-category="process">
+                        <i class="fas fa-exchange-alt"></i>
+                        <span>HTTP处理</span>
+                    </div>
+                    <div class="component-item draggable" data-node-type="commandLine" data-category="process">
+                        <i class="fas fa-terminal"></i>
+                        <span>命令行</span>
+                    </div>
+                    <div class="component-item draggable" data-node-type="condition" data-category="process">
+                        <i class="fas fa-code-branch"></i>
+                        <span>条件判断</span>
+                    </div>
+                </div>
+
+                <!-- 终止组 -->
+                <div class="component-group">
+                    <div class="group-title">终止节点</div>
+                    <div class="component-item draggable" data-node-type="end" data-category="terminate">
+                        <i class="fas fa-stop-circle"></i>
+                        <span>结束</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间画布 -->
+        <div class="workflow-center-panel" id="centerPanel">
+            <div class="canvas-toolbar">
+                <button class="btn btn-sm btn-outline-secondary" id="zoomInBtn" title="放大">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="zoomOutBtn" title="缩小">
+                    <i class="fas fa-search-minus"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="fitToScreenBtn" title="适应屏幕">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="centerCanvasBtn" title="居中">
+                    <i class="fas fa-crosshairs"></i>
+                </button>
+                <span class="zoom-level" id="zoomLevel">100%</span>
+            </div>
+            <canvas id="workflowCanvas"></canvas>
+        </div>
+
+        <!-- 右侧属性面板 -->
+        <div class="workflow-right-panel" id="rightPanel">
+            <div class="panel-header">
+                <h5>属性编辑器</h5>
+                <button class="btn btn-sm btn-link" id="toggleRightPanel">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            <div class="panel-body" id="propertiesPanel">
+                <div class="no-selection-message">
+                    <i class="fas fa-info-circle"></i>
+                    <p>请选择一个节点以编辑其属性</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="customJobId" value="@Model?.CustomJobId" />
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/workflow-editor.css" />
+}
+
+@section Scripts {
+    <script src="~/lib/fabric/fabric.min.js"></script>
+    <script src="~/js/workflow-editor.js"></script>
+}

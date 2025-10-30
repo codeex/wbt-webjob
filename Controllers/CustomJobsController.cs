@@ -66,6 +66,30 @@ public class CustomJobsController : Controller
         return View(customJob);
     }
 
+    // GET: /CustomJobs/WorkflowEditor
+    // GET: /CustomJobs/WorkflowEditor/{id}
+    public async Task<IActionResult> WorkflowEditor(Guid? id = null)
+    {
+        if (id.HasValue)
+        {
+            // 编辑模式
+            var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+            var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == id.Value);
+
+            if (customJob == null)
+            {
+                return NotFound();
+            }
+
+            return View(customJob);
+        }
+        else
+        {
+            // 创建模式
+            return View(new CustomJob());
+        }
+    }
+
     // GET: /CustomJobs/CreateWizard
     public async Task<IActionResult> CreateWizard(int step = 1, Guid? id = null)
     {

@@ -13,6 +13,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<WebJob> WebJobs { get; set; }
     public DbSet<JobLog> JobLogs { get; set; }
     public DbSet<CustomJob> CustomJobs { get; set; }
+    public DbSet<WorkflowNode> WorkflowNodes { get; set; }
+    public DbSet<WorkflowConnection> WorkflowConnections { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +46,41 @@ public class ApplicationDbContext : DbContext
         {
             entity.HasIndex(e => e.JobType).IsUnique();
             entity.HasIndex(e => e.IsActive);
+        });
+
+        // 配置WorkflowNode
+        modelBuilder.Entity<WorkflowNode>(entity =>
+        {
+            entity.HasIndex(e => e.CustomJobId);
+            entity.HasIndex(e => e.NodeType);
+
+            entity.HasOne(e => e.CustomJob)
+                .WithMany()
+                .HasForeignKey(e => e.CustomJobId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // 配置WorkflowConnection
+        modelBuilder.Entity<WorkflowConnection>(entity =>
+        {
+            entity.HasIndex(e => e.CustomJobId);
+            entity.HasIndex(e => e.SourceNodeId);
+            entity.HasIndex(e => e.TargetNodeId);
+
+            entity.HasOne(e => e.CustomJob)
+                .WithMany()
+                .HasForeignKey(e => e.CustomJobId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.SourceNode)
+                .WithMany()
+                .HasForeignKey(e => e.SourceNodeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.TargetNode)
+                .WithMany()
+                .HasForeignKey(e => e.TargetNodeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
