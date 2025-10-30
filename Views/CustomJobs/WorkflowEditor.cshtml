@@ -5,55 +5,103 @@
 }
 
 <div class="container-fluid mt-4">
-    <div class="row mb-3">
-        <div class="col">
-            <h2>@ViewData["Title"]</h2>
+    <!-- 顶部统一工具栏 -->
+    <div class="editor-main-toolbar">
+        <!-- 文件操作组 -->
+        <div class="toolbar-group">
+            <button type="button" class="btn btn-sm btn-primary" id="saveWorkflowBtn" title="保存工作流">
+                <i class="bi bi-save"></i> 保存
+            </button>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" title="导出">
+                    <i class="bi bi-download"></i> 导出
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#" id="exportPngBtn"><i class="bi bi-file-image"></i> 导出PNG</a></li>
+                    <li><a class="dropdown-item" href="#" id="exportSvgBtn"><i class="bi bi-file-earmark-code"></i> 导出SVG</a></li>
+                </ul>
+            </div>
+            <a asp-action="Index" class="btn btn-sm btn-outline-secondary" title="返回列表">
+                <i class="bi bi-arrow-left"></i>
+            </a>
         </div>
-        <div class="col-auto">
+
+        <div class="toolbar-divider"></div>
+
+        <!-- 编辑操作组 -->
+        <div class="toolbar-group">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="undoBtn" title="撤销">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="redoBtn" title="重做">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="deleteSelectedBtn" title="删除选中">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- 视图控制组 -->
+        <div class="toolbar-group">
+            <button class="btn btn-sm btn-outline-secondary" id="zoomInBtn" title="放大">
+                <i class="bi bi-zoom-in"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="zoomOutBtn" title="缩小">
+                <i class="bi bi-zoom-out"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="fitToScreenBtn" title="适应屏幕">
+                <i class="bi bi-aspect-ratio"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="centerCanvasBtn" title="居中">
+                <i class="bi bi-bullseye"></i>
+            </button>
+            <span class="zoom-level" id="zoomLevel">100%</span>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- 布局工具组 -->
+        <div class="toolbar-group">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="autoLayoutBtn" title="自动布局">
+                <i class="bi bi-diagram-3"></i> 自动布局
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="createGroupBtn" title="创建分组">
+                <i class="bi bi-collection"></i> 分组
+            </button>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- 连接线样式 -->
+        <div class="toolbar-group">
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" title="连接线样式">
+                    <i class="bi bi-bezier2"></i> <span id="edgeTypeLabel">折线</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item edge-type-option" href="#" data-edge-type="polyline">折线</a></li>
+                    <li><a class="dropdown-item edge-type-option" href="#" data-edge-type="bezier">贝塞尔曲线</a></li>
+                    <li><a class="dropdown-item edge-type-option" href="#" data-edge-type="line">直线</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 右侧面板控制组 -->
+        <div class="toolbar-group ms-auto">
             <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleLeftPanelBtn" title="切换工具箱">
                 <i class="bi bi-layout-sidebar"></i>
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleRightPanelBtn" title="切换属性面板">
                 <i class="bi bi-layout-sidebar-reverse"></i>
             </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleMiniMapBtn" title="切换小地图">
+                <i class="bi bi-map"></i>
+            </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleFullscreenBtn" title="全屏">
                 <i class="bi bi-arrows-fullscreen"></i>
             </button>
-            <button type="button" class="btn btn-primary" id="saveWorkflowBtn">
-                <i class="bi bi-save"></i> 保存工作流
-            </button>
-            <a asp-action="Index" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> 返回列表
-            </a>
-        </div>
-    </div>
-
-    <!-- 工作流基本信息 -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="workflowName">工作流名称</label>
-                        <input type="text" class="form-control" id="workflowName"
-                               value="@Model?.Name" placeholder="请输入工作流名称" required>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="workflowJobType">任务类型</label>
-                        <input type="text" class="form-control" id="workflowJobType"
-                               value="@Model?.JobType" placeholder="请输入任务类型标识" required>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="workflowDescription">描述</label>
-                        <input type="text" class="form-control" id="workflowDescription"
-                               value="@Model?.Description" placeholder="请输入工作流描述">
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -129,22 +177,9 @@
 
         <!-- 中间画布 -->
         <div class="workflow-center-panel" id="centerPanel">
-            <div class="canvas-toolbar">
-                <button class="btn btn-sm btn-outline-secondary" id="zoomInBtn" title="放大">
-                    <i class="bi bi-zoom-in"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-secondary" id="zoomOutBtn" title="缩小">
-                    <i class="bi bi-zoom-out"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-secondary" id="fitToScreenBtn" title="适应屏幕">
-                    <i class="bi bi-aspect-ratio"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-secondary" id="centerCanvasBtn" title="居中">
-                    <i class="bi bi-bullseye"></i>
-                </button>
-                <span class="zoom-level" id="zoomLevel">100%</span>
-            </div>
             <div id="workflowCanvas"></div>
+            <!-- 小地图容器 -->
+            <div class="minimap-container" id="minimapContainer" style="display: none;"></div>
         </div>
 
         <!-- 右侧属性面板 -->
@@ -157,6 +192,39 @@
                     <i class="bi bi-info-circle"></i>
                     <p>请选择一个节点以编辑其属性</p>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 保存工作流模态框 -->
+<div class="modal fade" id="saveWorkflowModal" tabindex="-1" aria-labelledby="saveWorkflowModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="saveWorkflowModalLabel">保存工作流</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="workflowName" class="form-label">工作流名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="workflowName"
+                           value="@Model?.Name" placeholder="请输入工作流名称" required>
+                </div>
+                <div class="mb-3">
+                    <label for="workflowJobType" class="form-label">任务类型 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="workflowJobType"
+                           value="@Model?.JobType" placeholder="请输入任务类型标识" required>
+                </div>
+                <div class="mb-3">
+                    <label for="workflowDescription" class="form-label">描述</label>
+                    <textarea class="form-control" id="workflowDescription" rows="3"
+                              placeholder="请输入工作流描述">@Model?.Description</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmSaveBtn">保存</button>
             </div>
         </div>
     </div>

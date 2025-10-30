@@ -2,7 +2,10 @@
 // 需要在HTML中先引入LogicFlow的CDN脚本
 
 // 兼容 shim：一些 logicflow 构建会导出为 Core 或 default，确保全局有 LogicFlow 变量
-const { LogicFlow, RectNode, RectNodeModel, PolygonNode, PolygonNodeModel,h } = window.Core;
+const { LogicFlow, RectNode, RectNodeModel, PolygonNode, PolygonNodeModel, h } = window.Core;
+
+// 尝试从扩展中获取 MiniMap
+const MiniMap = window.MiniMapPlugin || window.LogicFlowExtension?.MiniMap || null;
 
 // 自定义节点类
 class BaseModel extends RectNodeModel { }
@@ -129,6 +132,8 @@ class WorkflowEditor {
         this.selectedEdge = null;
         this.nodeIdCounter = 0;
         this.connectionIdCounter = 0;
+        this.miniMapVisible = false;
+        this.currentEdgeType = 'polyline';
 
         // 节点类型配置
         this.nodeTypes = {
@@ -332,7 +337,47 @@ class WorkflowEditor {
         document.getElementById('zoomOutBtn')?.addEventListener('click', () => this.zoomOut());
         document.getElementById('fitToScreenBtn')?.addEventListener('click', () => this.fitToScreen());
         document.getElementById('centerCanvasBtn')?.addEventListener('click', () => this.centerCanvas());
-        document.getElementById('saveWorkflowBtn')?.addEventListener('click', () => this.saveWorkflow());
+
+        // 保存按钮 - 打开模态框
+        document.getElementById('saveWorkflowBtn')?.addEventListener('click', () => this.showSaveModal());
+
+        // 模态框确认保存按钮
+        document.getElementById('confirmSaveBtn')?.addEventListener('click', () => this.saveWorkflow());
+
+        // 撤销/重做
+        document.getElementById('undoBtn')?.addEventListener('click', () => this.undo());
+        document.getElementById('redoBtn')?.addEventListener('click', () => this.redo());
+
+        // 删除选中
+        document.getElementById('deleteSelectedBtn')?.addEventListener('click', () => this.deleteSelected());
+
+        // 自动布局
+        document.getElementById('autoLayoutBtn')?.addEventListener('click', () => this.autoLayout());
+
+        // 创建分组
+        document.getElementById('createGroupBtn')?.addEventListener('click', () => this.createGroup());
+
+        // 导出功能
+        document.getElementById('exportPngBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.exportToPng();
+        });
+        document.getElementById('exportSvgBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.exportToSvg();
+        });
+
+        // 小地图切换
+        document.getElementById('toggleMiniMapBtn')?.addEventListener('click', () => this.toggleMiniMap());
+
+        // 连接线样式切换
+        document.querySelectorAll('.edge-type-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.preventDefault();
+                const edgeType = option.getAttribute('data-edge-type');
+                this.changeEdgeType(edgeType);
+            });
+        });
 
         // 拖拽组件到画布
         document.querySelectorAll('.component-item.draggable').forEach(item => {
@@ -730,6 +775,305 @@ class WorkflowEditor {
         }
     }
 
+    // 撤销
+    undo() {
+        if (this.lf && typeof this.lf.undo === 'function') {
+            this.lf.undo();
+        }
+    }
+
+    // 重做
+    redo() {
+        if (this.lf && typeof this.lf.redo === 'function') {
+            this.lf.redo();
+        }
+    }
+
+    // 显示保存模态框
+    showSaveModal() {
+        const modal = new bootstrap.Modal(document.getElementById('saveWorkflowModal'));
+        modal.show();
+    }
+
+    // 切换小地图
+    toggleMiniMap() {
+        this.miniMapVisible = !this.miniMapVisible;
+        const minimapContainer = document.getElementById('minimapContainer');
+
+        if (this.miniMapVisible) {
+            minimapContainer.style.display = 'block';
+            this.initMiniMap();
+        } else {
+            minimapContainer.style.display = 'none';
+        }
+    }
+
+    // 初始化小地图
+    initMiniMap() {
+        const minimapContainer = document.getElementById('minimapContainer');
+        if (!minimapContainer || !this.lf) return;
+
+        // 清空容器
+        minimapContainer.innerHTML = '';
+
+        // 创建简单的小地图（使用缩小的SVG副本）
+        try {
+            const graphData = this.lf.getGraphData();
+            const canvas = document.getElementById('workflowCanvas');
+            const svg = canvas.querySelector('svg');
+
+            if (svg) {
+                // 克隆SVG
+                const clone = svg.cloneNode(true);
+                clone.style.width = '100%';
+                clone.style.height = '100%';
+                clone.style.pointerEvents = 'none';
+                minimapContainer.appendChild(clone);
+            }
+        } catch (error) {
+            console.error('初始化小地图失败:', error);
+            minimapContainer.innerHTML = '<div style="padding: 10px; text-align: center; color: #999;">小地图不可用</div>';
+        }
+    }
+
+    // 自动布局
+    autoLayout() {
+        const graphData = this.lf.getGraphData();
+        if (!graphData || graphData.nodes.length === 0) {
+            alert('画布上没有节点');
+            return;
+        }
+
+        // 简单的自动布局算法 - 垂直排列
+        const startX = 300;
+        const startY = 100;
+        const horizontalGap = 250;
+        const verticalGap = 150;
+
+        // 按类型分组节点
+        const nodesByType = {
+            input: [],
+            process: [],
+            terminate: []
+        };
+
+        graphData.nodes.forEach(node => {
+            const nodeType = node.properties?.nodeType || node.type;
+            const config = this.nodeTypes[nodeType];
+            if (config) {
+                const category = config.category;
+                if (nodesByType[category]) {
+                    nodesByType[category].push(node);
+                }
+            }
+        });
+
+        // 布局各个层级
+        let currentY = startY;
+
+        // 输入节点层
+        if (nodesByType.input.length > 0) {
+            this.layoutNodesInRow(nodesByType.input, startX, currentY, horizontalGap);
+            currentY += verticalGap;
+        }
+
+        // 处理节点层
+        if (nodesByType.process.length > 0) {
+            this.layoutNodesInRow(nodesByType.process, startX, currentY, horizontalGap);
+            currentY += verticalGap;
+        }
+
+        // 终止节点层
+        if (nodesByType.terminate.length > 0) {
+            this.layoutNodesInRow(nodesByType.terminate, startX, currentY, horizontalGap);
+        }
+
+        // 适应屏幕
+        setTimeout(() => this.fitToScreen(), 100);
+    }
+
+    layoutNodesInRow(nodes, startX, y, gap) {
+        const totalWidth = (nodes.length - 1) * gap;
+        let x = startX - totalWidth / 2;
+
+        nodes.forEach(node => {
+            this.lf.setProperties(node.id, {
+                ...node.properties,
+                x: x,
+                y: y
+            });
+            // 更新节点位置
+            const nodeModel = this.lf.getNodeModelById(node.id);
+            if (nodeModel) {
+                nodeModel.x = x;
+                nodeModel.y = y;
+                nodeModel.moveTo(x, y);
+            }
+            x += gap;
+        });
+    }
+
+    // 创建分组
+    createGroup() {
+        const graphData = this.lf.getGraphData();
+        const selectedNodes = graphData.nodes.filter(node => {
+            const element = this.lf.getNodeModelById(node.id);
+            return element && element.isSelected;
+        });
+
+        if (selectedNodes.length < 2) {
+            alert('请至少选择两个节点来创建分组');
+            return;
+        }
+
+        // 计算边界
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        selectedNodes.forEach(node => {
+            const width = 120;
+            const height = 60;
+            minX = Math.min(minX, node.x - width / 2);
+            minY = Math.min(minY, node.y - height / 2);
+            maxX = Math.max(maxX, node.x + width / 2);
+            maxY = Math.max(maxY, node.y + height / 2);
+        });
+
+        const padding = 30;
+        const groupWidth = maxX - minX + padding * 2;
+        const groupHeight = maxY - minY + padding * 2;
+        const groupX = (minX + maxX) / 2;
+        const groupY = (minY + maxY) / 2;
+
+        // 创建分组（使用rect节点模拟）
+        try {
+            this.lf.addNode({
+                type: 'rect',
+                x: groupX,
+                y: groupY,
+                text: '分组',
+                properties: {
+                    width: groupWidth,
+                    height: groupHeight,
+                    style: {
+                        fill: 'rgba(135, 206, 250, 0.1)',
+                        stroke: '#87CEEB',
+                        strokeWidth: 2,
+                        strokeDasharray: '5,5'
+                    }
+                }
+            });
+            alert('分组创建成功');
+        } catch (error) {
+            console.error('创建分组失败:', error);
+            alert('创建分组失败，LogicFlow可能不支持此功能');
+        }
+    }
+
+    // 切换连接线样式
+    changeEdgeType(edgeType) {
+        this.currentEdgeType = edgeType;
+        this.lf.setDefaultEdgeType(edgeType);
+
+        // 更新标签文本
+        const labels = {
+            'polyline': '折线',
+            'bezier': '贝塞尔曲线',
+            'line': '直线'
+        };
+        const label = document.getElementById('edgeTypeLabel');
+        if (label) {
+            label.textContent = labels[edgeType] || edgeType;
+        }
+
+        alert(`连接线样式已切换为: ${labels[edgeType]}`);
+    }
+
+    // 导出为PNG
+    exportToPng() {
+        const canvas = document.getElementById('workflowCanvas');
+        const svg = canvas.querySelector('svg');
+
+        if (!svg) {
+            alert('无法找到画布SVG元素');
+            return;
+        }
+
+        try {
+            // 获取SVG的尺寸
+            const bbox = svg.getBBox();
+            const width = bbox.width + 100;
+            const height = bbox.height + 100;
+
+            // 创建临时canvas
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const ctx = tempCanvas.getContext('2d');
+
+            // 设置白色背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+
+            // 将SVG转换为图片
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const img = new Image();
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            img.onload = () => {
+                ctx.drawImage(img, 50, 50);
+                URL.revokeObjectURL(url);
+
+                // 下载PNG
+                tempCanvas.toBlob((blob) => {
+                    const link = document.createElement('a');
+                    link.download = 'workflow-' + new Date().getTime() + '.png';
+                    link.href = URL.createObjectURL(blob);
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                });
+            };
+
+            img.src = url;
+        } catch (error) {
+            console.error('导出PNG失败:', error);
+            alert('导出PNG失败: ' + error.message);
+        }
+    }
+
+    // 导出为SVG
+    exportToSvg() {
+        const canvas = document.getElementById('workflowCanvas');
+        const svg = canvas.querySelector('svg');
+
+        if (!svg) {
+            alert('无法找到画布SVG元素');
+            return;
+        }
+
+        try {
+            // 克隆SVG以避免修改原始SVG
+            const clonedSvg = svg.cloneNode(true);
+
+            // 设置SVG属性
+            clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+            // 序列化SVG
+            const svgData = new XMLSerializer().serializeToString(clonedSvg);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+
+            // 下载SVG
+            const link = document.createElement('a');
+            link.download = 'workflow-' + new Date().getTime() + '.svg';
+            link.href = URL.createObjectURL(svgBlob);
+            link.click();
+            URL.revokeObjectURL(link.href);
+        } catch (error) {
+            console.error('导出SVG失败:', error);
+            alert('导出SVG失败: ' + error.message);
+        }
+    }
+
     saveWorkflow() {
         const workflowName = document.getElementById('workflowName').value.trim();
         const workflowJobType = document.getElementById('workflowJobType').value.trim();
@@ -787,6 +1131,12 @@ class WorkflowEditor {
                 return response.json();
             })
             .then(data => {
+                // 关闭模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('saveWorkflowModal'));
+                if (modal) {
+                    modal.hide();
+                }
+
                 alert('工作流保存成功！');
                 if (!customJobId || customJobId === '00000000-0000-0000-0000-000000000000') {
                     window.location.href = `/CustomJobs/WorkflowEditor/${data.customJobId}`;
