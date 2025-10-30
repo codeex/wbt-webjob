@@ -236,7 +236,7 @@ class WorkflowEditor {
         const halfWidth = nodeWidth / 2;
         const halfHeight = nodeHeight / 2;
 
-        // 输入点（除了输入组，其他都有） - 在右边边缘
+        // 输入组件（开始、触发器、事件）- 右边是输出端口
         if (category == 'input') {
             const outputPort = new fabric.Circle({
                 radius: 6,
@@ -247,7 +247,7 @@ class WorkflowEditor {
                 top: group.get("top") + halfHeight,   // 右边缘
                 originX: 'center',
                 originY: 'center',
-                portType: 'input',
+                portType: 'output',  // 右边是输出端口
                 selectable: false
             });
             group.addWithUpdate(outputPort);
@@ -262,12 +262,12 @@ class WorkflowEditor {
                 top: group.get("top") + halfHeight,
                 originX: 'center',
                 originY: 'center',
-                portType: 'output',
+                portType: 'input',  // 左边是输入端口
                 selectable: false
             });
             group.addWithUpdate(inputPort);
         }
-        // 输出点 - 在左边边缘
+        // 处理组件 - 左边是输入端口
         else {
             const inputPort = new fabric.Circle({
                 radius: 6,
@@ -278,7 +278,7 @@ class WorkflowEditor {
                 top: group.get("top") + halfHeight,
                 originX: 'center',
                 originY: 'center',
-                portType: 'output',
+                portType: 'input',  // 左边是输入端口
                 selectable: false
             });
             group.addWithUpdate(inputPort);
@@ -326,7 +326,7 @@ class WorkflowEditor {
                     top: group.get("top") + halfHeight,   // 右边缘
                     originX: 'center',
                     originY: 'center',
-                    portType: 'input',
+                    portType: 'output',  // 右边是输出端口
                     selectable: false
                 });
                 group.addWithUpdate(outputPort);
@@ -359,22 +359,27 @@ class WorkflowEditor {
         const pointer = this.canvas.getPointer(e.e);
         const port = this.findPortAtPosition(target, pointer);
 
-        if (port && port.portType !== 'output') {
+        if (port && port.portType === 'output') {
+            // 点击输出端口，开始连接
             if (!this.connectingFrom) {
-                // 开始连接
                 this.connectingFrom = {
                     node: target,
                     port: port.portName || 'default'
                 };
             }
-        } else if (port && port.portType !== 'input') {
+        } else if (port && port.portType === 'input') {
+            // 点击输入端口，完成连接
             if (this.connectingFrom) {
-                // 完成连接
-                this.createConnection(
-                    this.connectingFrom.node,
-                    target,
-                    this.connectingFrom.port
-                );
+                // 检查是否是同一个节点，防止自己连接自己
+                if (this.connectingFrom.node.nodeId !== target.nodeId) {
+                    this.createConnection(
+                        this.connectingFrom.node,
+                        target,
+                        this.connectingFrom.port
+                    );
+                } else {
+                    console.log('不能连接到自己');
+                }
                 this.connectingFrom = null;
             }
         }
