@@ -1,17 +1,122 @@
-// 工作流编辑器
+// 基于 LogicFlow v2 的工作流编辑器 - 使用全局变量方式
+// 需要在HTML中先引入LogicFlow的CDN脚本
+
+// 自定义节点类
+class WorkflowNode extends LogicFlow.RectNode {
+    getShape() {
+        const { model } = this.props;
+        const { x, y, width, height } = model;
+        const properties = model.properties;
+
+        return LogicFlow.h('g', {}, [
+            LogicFlow.h('rect', {
+                x: x - width / 2,
+                y: y - height / 2,
+                rx: 8,
+                ry: 8,
+                width,
+                height,
+                fill: properties.color || '#007bff',
+                stroke: '#333',
+                strokeWidth: 2
+            }),
+            LogicFlow.h('text', {
+                fill: '#fff',
+                fontSize: 32,
+                textAnchor: 'middle',
+                x,
+                y: y - 5
+            }, properties.icon || ''),
+            LogicFlow.h('text', {
+                fill: '#fff',
+                fontSize: 12,
+                textAnchor: 'middle',
+                x,
+                y: y + 25
+            }, properties.label || '')
+        ]);
+    }
+}
+
+// 开始节点
+class StartNode extends WorkflowNode {
+    static extendKey = 'start';
+}
+
+// 触发器节点
+class TriggerNode extends WorkflowNode {
+    static extendKey = 'trigger';
+}
+
+// 事件节点
+class EventNode extends WorkflowNode {
+    static extendKey = 'event';
+}
+
+// HTTP授权节点
+class HttpAuthNode extends WorkflowNode {
+    static extendKey = 'httpAuth';
+}
+
+// HTTP处理节点
+class HttpActionNode extends WorkflowNode {
+    static extendKey = 'httpAction';
+}
+
+// 命令行节点
+class CommandLineNode extends WorkflowNode {
+    static extendKey = 'commandLine';
+}
+
+// 条件判断节点（菱形）
+class ConditionNode extends LogicFlow.PolygonNode {
+    static extendKey = 'condition';
+
+    getShape() {
+        const { model } = this.props;
+        const { x, y, width, height } = model;
+        const properties = model.properties;
+
+        const points = [
+            [x, y - height / 2],
+            [x + width / 2, y],
+            [x, y + height / 2],
+            [x - width / 2, y]
+        ];
+
+        return LogicFlow.h('g', {}, [
+            LogicFlow.h('polygon', {
+                points: points.map(p => p.join(',')).join(' '),
+                fill: '#fd7e14',
+                stroke: '#333',
+                strokeWidth: 2
+            }),
+            LogicFlow.h('text', {
+                fill: '#fff',
+                fontSize: 28,
+                textAnchor: 'middle',
+                x,
+                y: y + 8
+            }, '?')
+        ]);
+    }
+}
+
+// 结束节点
+class EndNode extends WorkflowNode {
+    static extendKey = 'end';
+}
+
+// 工作流编辑器主类
 class WorkflowEditor {
     constructor() {
-        this.canvas = null;
-        this.nodes = new Map(); // nodeId => fabric object
-        this.connections = new Map(); // connectionId => fabric line
+        this.lf = null;
         this.selectedNode = null;
-        this.currentMode = 'select'; // select, connect
-        this.connectingFrom = null; // 正在连接的源节点
-        this.zoom = 1;
+        this.selectedEdge = null;
         this.nodeIdCounter = 0;
         this.connectionIdCounter = 0;
 
-        // 节点类型配置（使用Bootstrap Icons的Unicode）
+        // 节点类型配置
         this.nodeTypes = {
             start: { label: '开始', color: '#28a745', icon: '▶', category: 'input' },
             trigger: { label: '触发器', color: '#17a2b8', icon: '⏰', category: 'input' },
@@ -27,132 +132,206 @@ class WorkflowEditor {
     }
 
     init() {
-        this.initCanvas();
+        this.initLogicFlow();
         this.initEvents();
         this.loadWorkflow();
     }
 
-    initCanvas() {
-        const canvasEl = document.getElementById('workflowCanvas');
-        const container = document.getElementById('centerPanel');
+    initLogicFlow() {
+        const container = document.getElementById('workflowCanvas');
+        if (!container) {
+            console.error('找不到画布容器');
+            return;
+        }
 
-        // 设置画布大小
-        canvasEl.width = container.clientWidth;
-        canvasEl.height = container.clientHeight;
-
-        // 初始化Fabric画布
-        this.canvas = new fabric.Canvas('workflowCanvas', {
-            selection: true,
-            backgroundColor: 'transparent'
+        // 初始化 LogicFlow
+        this.lf = new LogicFlow({
+            container: container,
+            width: container.clientWidth,
+            height: container.clientHeight,
+            grid: {
+                size: 20,
+                visible: true,
+                type: 'dot',
+                config: {
+                    color: '#ababab',
+                    thickness: 1,
+                }
+            },
+            background: {
+                color: '#f8f9fa'
+            },
+            keyboard: {
+                enabled: true
+            },
+            snapline: true,
+            history: true,
+            partial: true,
+            edgeType: 'bezier',
+            isSilentMode: false,
+            stopScrollGraph: false,
+            stopZoomGraph: false,
+            style: {
+                rect: {
+                    rx: 8,
+                    ry: 8,
+                    strokeWidth: 2
+                },
+                circle: {
+                    fill: '#f5f5f5',
+                    stroke: '#666'
+                },
+                nodeText: {
+                    color: '#000',
+                    overflowMode: 'autoWrap',
+                    lineHeight: 1.5
+                },
+                edgeText: {
+                    textWidth: 100,
+                    overflowMode: 'autoWrap',
+                    fontSize: 12,
+                    background: {
+                        fill: '#ffffff'
+                    }
+                }
+            }
         });
 
-        // 窗口大小调整时重新设置画布大小
+        // 注册自定义节点
+        this.lf.register(StartNode);
+        this.lf.register(TriggerNode);
+        this.lf.register(EventNode);
+        this.lf.register(HttpAuthNode);
+        this.lf.register(HttpActionNode);
+        this.lf.register(CommandLineNode);
+        this.lf.register(ConditionNode);
+        this.lf.register(EndNode);
+
+        // 设置默认边类型为贝塞尔曲线
+        this.lf.setDefaultEdgeType('polyline');
+
+        // 渲染画布
+        this.lf.render();
+
+        // 窗口大小调整
         window.addEventListener('resize', () => {
-            this.canvas.setWidth(container.clientWidth);
-            this.canvas.setHeight(container.clientHeight);
-            this.canvas.renderAll();
+            if (this.lf && container) {
+                this.lf.resize(container.clientWidth, container.clientHeight);
+            }
         });
     }
 
     initEvents() {
         // 左右面板切换
-        document.getElementById('toggleLeftPanelBtn').addEventListener('click', () => {
-            document.getElementById('leftPanel').classList.toggle('collapsed');
-            setTimeout(() => {
-                this.canvas.setWidth(document.getElementById('centerPanel').clientWidth);
-                this.canvas.setHeight(document.getElementById('centerPanel').clientHeight);
-                this.canvas.renderAll();
-            }, 300);
-        });
+        const toggleLeftBtn = document.getElementById('toggleLeftPanelBtn');
+        if (toggleLeftBtn) {
+            toggleLeftBtn.addEventListener('click', () => {
+                document.getElementById('leftPanel').classList.toggle('collapsed');
+                setTimeout(() => {
+                    const container = document.getElementById('workflowCanvas');
+                    if (this.lf && container) {
+                        this.lf.resize(container.clientWidth, container.clientHeight);
+                    }
+                }, 300);
+            });
+        }
 
-        document.getElementById('toggleRightPanelBtn').addEventListener('click', () => {
-            document.getElementById('rightPanel').classList.toggle('collapsed');
-            setTimeout(() => {
-                this.canvas.setWidth(document.getElementById('centerPanel').clientWidth);
-                this.canvas.setHeight(document.getElementById('centerPanel').clientHeight);
-                this.canvas.renderAll();
-            }, 300);
-        });
+        const toggleRightBtn = document.getElementById('toggleRightPanelBtn');
+        if (toggleRightBtn) {
+            toggleRightBtn.addEventListener('click', () => {
+                document.getElementById('rightPanel').classList.toggle('collapsed');
+                setTimeout(() => {
+                    const container = document.getElementById('workflowCanvas');
+                    if (this.lf && container) {
+                        this.lf.resize(container.clientWidth, container.clientHeight);
+                    }
+                }, 300);
+            });
+        }
 
         // 全屏切换
-        document.getElementById('toggleFullscreenBtn').addEventListener('click', () => {
-            const container = document.getElementById('workflowEditorContainer');
-            container.classList.toggle('fullscreen');
-            setTimeout(() => {
-                this.canvas.setWidth(document.getElementById('centerPanel').clientWidth);
-                this.canvas.setHeight(document.getElementById('centerPanel').clientHeight);
-                this.canvas.renderAll();
-            }, 100);
-        });
-
-        // 画布控制按钮
-        document.getElementById('zoomInBtn').addEventListener('click', () => this.zoomIn());
-        document.getElementById('zoomOutBtn').addEventListener('click', () => this.zoomOut());
-        document.getElementById('fitToScreenBtn').addEventListener('click', () => this.fitToScreen());
-        document.getElementById('centerCanvasBtn').addEventListener('click', () => this.centerCanvas());
-
-        // 保存按钮
-        document.getElementById('saveWorkflowBtn').addEventListener('click', () => this.saveWorkflow());
-
-        // 操作工具选择
-        document.querySelectorAll('.component-item[data-category="action"]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const nodeType = item.getAttribute('data-node-type');
-                this.setMode(nodeType);
-
-                // 更新选中状态
-                document.querySelectorAll('.component-item[data-category="action"]').forEach(i => {
-                    i.classList.remove('active');
-                });
-                item.classList.add('active');
+        const toggleFullscreenBtn = document.getElementById('toggleFullscreenBtn');
+        if (toggleFullscreenBtn) {
+            toggleFullscreenBtn.addEventListener('click', () => {
+                const editorContainer = document.getElementById('workflowEditorContainer');
+                editorContainer.classList.toggle('fullscreen');
+                setTimeout(() => {
+                    const container = document.getElementById('workflowCanvas');
+                    if (this.lf && container) {
+                        this.lf.resize(container.clientWidth, container.clientHeight);
+                    }
+                }, 100);
             });
-        });
+        }
 
-        // 可拖放组件
+        // 工具栏按钮
+        document.getElementById('zoomInBtn')?.addEventListener('click', () => this.zoomIn());
+        document.getElementById('zoomOutBtn')?.addEventListener('click', () => this.zoomOut());
+        document.getElementById('fitToScreenBtn')?.addEventListener('click', () => this.fitToScreen());
+        document.getElementById('centerCanvasBtn')?.addEventListener('click', () => this.centerCanvas());
+        document.getElementById('saveWorkflowBtn')?.addEventListener('click', () => this.saveWorkflow());
+
+        // 拖拽组件到画布
         document.querySelectorAll('.component-item.draggable').forEach(item => {
             item.addEventListener('dragstart', (e) => {
                 const nodeType = item.getAttribute('data-node-type');
                 e.dataTransfer.setData('nodeType', nodeType);
-                e.dataTransfer.effectAllowed = 'copy';
             });
             item.setAttribute('draggable', 'true');
         });
 
-        // 画布拖放
         const centerPanel = document.getElementById('centerPanel');
-        centerPanel.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'copy';
-        });
+        if (centerPanel) {
+            centerPanel.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
 
-        centerPanel.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const nodeType = e.dataTransfer.getData('nodeType');
-            if (nodeType) {
-                const rect = this.canvas.upperCanvasEl.getBoundingClientRect();
-                const x = (e.clientX - rect.left) / this.zoom;
-                const y = (e.clientY - rect.top) / this.zoom;
-                this.createNode(nodeType, x, y);
-            }
-        });
+            centerPanel.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const nodeType = e.dataTransfer.getData('nodeType');
+                if (nodeType && this.lf) {
+                    const point = this.lf.getPointByClient(e.clientX, e.clientY);
+                    this.createNode(nodeType, point.x, point.y);
+                }
+            });
+        }
 
-        // 画布事件
-        this.canvas.on('selection:created', (e) => this.onNodeSelected(e));
-        this.canvas.on('selection:updated', (e) => this.onNodeSelected(e));
-        this.canvas.on('selection:cleared', () => this.onNodeDeselected());
-        this.canvas.on('mouse:down', (e) => this.onCanvasMouseDown(e));
-        this.canvas.on('mouse:move', (e) => this.onCanvasMouseMove(e));
-    }
+        // LogicFlow 事件监听
+        if (this.lf) {
+            // 节点点击
+            this.lf.on('node:click', ({ data }) => {
+                this.selectedNode = data;
+                this.selectedEdge = null;
+                this.showProperties(data);
+            });
 
-    setMode(mode) {
-        this.currentMode = mode;
-        this.connectingFrom = null;
+            // 边点击
+            this.lf.on('edge:click', ({ data }) => {
+                this.selectedEdge = data;
+                this.selectedNode = null;
+                this.showEdgeProperties(data);
+            });
 
-        // 更新鼠标样式
-        if (mode === 'connect') {
-            this.canvas.defaultCursor = 'crosshair';
-        } else {
-            this.canvas.defaultCursor = 'default';
+            // 画布点击
+            this.lf.on('blank:click', () => {
+                this.selectedNode = null;
+                this.selectedEdge = null;
+                this.hideProperties();
+            });
+
+            // 节点删除
+            this.lf.on('node:delete', ({ data }) => {
+                if (this.selectedNode && this.selectedNode.id === data.id) {
+                    this.hideProperties();
+                }
+            });
+
+            // 边删除
+            this.lf.on('edge:delete', ({ data }) => {
+                if (this.selectedEdge && this.selectedEdge.id === data.id) {
+                    this.hideProperties();
+                }
+            });
         }
     }
 
@@ -163,176 +342,26 @@ class WorkflowEditor {
         const nodeId = `node_${++this.nodeIdCounter}`;
         const nodeName = `${config.label}${this.nodeIdCounter}`;
 
-        const nodeWidth = 120;
-        const nodeHeight = 100;
-
-        // 创建节点矩形
-        const rect = new fabric.Rect({
-            width: nodeWidth,
-            height: nodeHeight,
-            fill: config.color,
-            stroke: '#333',
-            strokeWidth: 2,
-            rx: 8,
-            ry: 8,
-            originX: 'center',
-            originY: 'center'
-        });
-
-        // 创建图标
-        const icon = new fabric.Text(config.icon, {
-            fontSize: 32,
-            fill: '#fff',
-            fontFamily: 'Arial',
-            originX: 'center',
-            originY: 'center',
-            top: -15
-        });
-
-        // 创建节点标签（在图标下方）
-        const label = new fabric.Text(nodeName, {
-            fontSize: 12,
-            fill: '#fff',
-            fontFamily: 'Arial',
-            originX: 'center',
-            originY: 'center',
-            top: 25
-        });
-
-        // 创建节点组
-        const group = new fabric.Group([rect, icon, label], {
-            left: x,
-            top: y,
-            selectable: true,
-            hasControls: false,
-            hasBorders: true,
-            borderColor: '#007bff',
-            borderScaleFactor: 2,
-            padding: 0,
-            nodeId: nodeId,
-            nodeType: nodeType,
-            nodeName: nodeName,
-            nodeData: {
-                name: nodeName,
+        const nodeConfig = {
+            id: nodeId,
+            type: nodeType,
+            x: x,
+            y: y,
+            text: nodeName,
+            properties: {
+                nodeId: nodeId,
+                nodeType: nodeType,
+                nodeName: nodeName,
+                label: nodeName,
+                icon: config.icon,
+                color: config.color,
                 configuration: this.getDefaultConfiguration(nodeType)
             }
-        });
+        };
 
-        // 添加连接点
-        this.addConnectionPoints(group, nodeType, nodeWidth, nodeHeight);
+        this.lf.addNode(nodeConfig);
 
-        // 添加到画布
-        this.canvas.add(group);
-        this.nodes.set(nodeId, group);
-        this.canvas.renderAll();
-
-        return group;
-    }
-
-    addConnectionPoints(group, nodeType, nodeWidth, nodeHeight) {
-        const config = this.nodeTypes[nodeType];
-        const category = config.category;
-
-        const halfWidth = nodeWidth / 2;
-        const halfHeight = nodeHeight / 2;
-
-        // 输入组件（开始、触发器、事件）- 右边是输出端口
-        if (category == 'input') {
-            const outputPort = new fabric.Circle({
-                radius: 6,
-                fill: '#fff',
-                stroke: '#333',
-                strokeWidth: 2,
-                left: group.get("left") + nodeWidth,
-                top: group.get("top") + halfHeight,   // 右边缘
-                originX: 'center',
-                originY: 'center',
-                portType: 'output',  // 右边是输出端口
-                selectable: false
-            });
-            group.addWithUpdate(outputPort);
-        }
-        else if (category == 'terminate') {
-            const inputPort = new fabric.Circle({
-                radius: 6,
-                fill: '#fff',
-                stroke: '#333',
-                strokeWidth: 2,
-                left: group.get("left"),
-                top: group.get("top") + halfHeight,
-                originX: 'center',
-                originY: 'center',
-                portType: 'input',  // 左边是输入端口
-                selectable: false
-            });
-            group.addWithUpdate(inputPort);
-        }
-        // 处理组件 - 左边是输入端口
-        else {
-            const inputPort = new fabric.Circle({
-                radius: 6,
-                fill: '#fff',
-                stroke: '#333',
-                strokeWidth: 2,
-                left: group.get("left"),
-                top: group.get("top") + halfHeight,
-                originX: 'center',
-                originY: 'center',
-                portType: 'input',  // 左边是输入端口
-                selectable: false
-            });
-            group.addWithUpdate(inputPort);
-
-            if (nodeType == 'condition') {
-                // 条件节点有两个输出：真和假
-                const truePort = new fabric.Circle({
-                    radius: 6,
-                    fill: '#28a745',
-                    stroke: '#333',
-                    strokeWidth: 2,
-                    left: group.get("left") + nodeWidth + 6,  // 右边缘
-                    top: group.get("top") + halfHeight / 2,
-                    originX: 'center',
-                    originY: 'center',
-                    portType: 'output',
-                    portName: 'true',
-                    selectable: false
-                });
-
-                const falsePort = new fabric.Circle({
-                    radius: 6,
-                    fill: '#dc3545',
-                    stroke: '#333',
-                    strokeWidth: 2,
-                    left: group.get("left") + nodeWidth +6,  // 右边缘
-                    top: group.get("top") + 3*halfHeight / 2,
-                    originX: 'center',
-                    originY: 'center',
-                    portType: 'output',
-                    portName: 'false',
-                    selectable: false
-                });
-
-                group.addWithUpdate(truePort);
-                group.addWithUpdate(falsePort);
-            }
-            else {
-                const outputPort = new fabric.Circle({
-                    radius: 6,
-                    fill: '#fff',
-                    stroke: '#333',
-                    strokeWidth: 2,
-                    left: group.get("left") + nodeWidth +6,
-                    top: group.get("top") + halfHeight,   // 右边缘
-                    originX: 'center',
-                    originY: 'center',
-                    portType: 'output',  // 右边是输出端口
-                    selectable: false
-                });
-                group.addWithUpdate(outputPort);
-            }
-        }        
-        
+        return nodeId;
     }
 
     getDefaultConfiguration(nodeType) {
@@ -349,265 +378,111 @@ class WorkflowEditor {
         return defaults[nodeType] || {};
     }
 
-    onCanvasMouseDown(e) {
-        if (this.currentMode !== 'connect') return;
-
-        const target = e.target;
-        if (!target || !target.nodeId) return;
-
-        // 检查是否点击了连接点
-        const pointer = this.canvas.getPointer(e.e);
-        const port = this.findPortAtPosition(target, pointer);
-
-        if (port && port.portType === 'output') {
-            // 点击输出端口，开始连接
-            if (!this.connectingFrom) {
-                this.connectingFrom = {
-                    node: target,
-                    port: port.portName || 'default'
-                };
-            }
-        } else if (port && port.portType === 'input') {
-            // 点击输入端口，完成连接
-            if (this.connectingFrom) {
-                // 检查是否是同一个节点，防止自己连接自己
-                if (this.connectingFrom.node.nodeId !== target.nodeId) {
-                    this.createConnection(
-                        this.connectingFrom.node,
-                        target,
-                        this.connectingFrom.port
-                    );
-                } else {
-                    console.log('不能连接到自己');
-                }
-                this.connectingFrom = null;
-            }
-        }
-    }
-
-    onCanvasMouseMove(e) {
-        if (this.currentMode !== 'connect') return;
-
-        const target = e.target;
-        if (!target || !target.nodeId) {
-            // 不在节点上，恢复默认光标
-            this.canvas.defaultCursor = 'crosshair';
-            this.canvas.hoverCursor = 'crosshair';
-            return;
-        }
-
-        // 检查鼠标是否在连接区域
-        const pointer = this.canvas.getPointer(e.e);
-        const port = this.findPortAtPosition(target, pointer);
-
-        if (port) {
-            // 在连接区域，显示指针光标表示可以点击
-            this.canvas.hoverCursor = 'pointer';
-        } else {
-            // 不在连接区域，显示默认连接光标
-            this.canvas.hoverCursor = 'crosshair';
-        }
-    }
-
-    findPortAtPosition(node, pointer) {
-        // 获取节点的中心点和边界
-        const center = node.getCenterPoint();
-        const nodeWidth = 120;
-        const nodeHeight = 100;
-        const halfWidth = nodeWidth / 2;
-        const halfHeight = nodeHeight / 2;
-
-        // 计算节点的边界
-        const nodeLeft = center.x - halfWidth;
-        const nodeRight = center.x + halfWidth;
-        const nodeTop = center.y - halfHeight;
-        const nodeBottom = center.y + halfHeight;
-
-        // 检查鼠标是否在节点范围内
-        if (pointer.x < nodeLeft || pointer.x > nodeRight ||
-            pointer.y < nodeTop || pointer.y > nodeBottom) {
-            return null;
-        }
-
-        // 获取节点的端口对象
-        const objects = node.getObjects();
-        const ports = objects.filter(obj => obj.portType);
-
-        // 判断鼠标在节点的左半部分还是右半部分
-        const isRightHalf = pointer.x > center.x;
-
-        if (isRightHalf) {
-            // 右半部分 - 查找输出端口
-            const outputPorts = ports.filter(p => p.portType === 'output');
-
-            if (outputPorts.length === 0) {
-                return null;
-            }
-
-            if (outputPorts.length === 1) {
-                // 单个输出端口（普通节点）
-                return outputPorts[0];
-            } else {
-                // 两个输出端口（条件节点）- 平分右半部分的上下区域
-                const isTopHalf = pointer.y < center.y;
-                // true端口在上半部分，false端口在下半部分
-                return outputPorts.find(p =>
-                    (isTopHalf && p.portName === 'true') ||
-                    (!isTopHalf && p.portName === 'false')
-                );
-            }
-        } else {
-            // 左半部分 - 查找输入端口
-            const inputPort = ports.find(p => p.portType === 'input');
-            return inputPort || null;
-        }
-    }
-
-    createConnection(sourceNode, targetNode, sourcePort = 'default') {
-        const connectionId = `conn_${++this.connectionIdCounter}`;
-
-        // 计算连接线的起点和终点
-        const sourcePoint = this.getNodeOutputPoint(sourceNode, sourcePort);
-        const targetPoint = this.getNodeInputPoint(targetNode);
-
-        // 创建连接线
-        const line = new fabric.Line([
-            sourcePoint.x, sourcePoint.y,
-            targetPoint.x, targetPoint.y
-        ], {
-            stroke: '#666',
-            strokeWidth: 2,
-            selectable: false,
-            evented: false,
-            connectionId: connectionId,
-            sourceNodeId: sourceNode.nodeId,
-            targetNodeId: targetNode.nodeId,
-            sourcePort: sourcePort
-        });
-
-        // 添加箭头
-        const arrow = this.createArrow(targetPoint.x, targetPoint.y, Math.PI);
-
-        this.canvas.add(line);
-        this.canvas.add(arrow);
-
-        // 将连接线放到最底层
-        line.sendToBack();
-        arrow.sendToBack();
-
-        this.connections.set(connectionId, { line, arrow, sourceNode, targetNode });
-        this.canvas.renderAll();
-
-        // 监听节点移动以更新连接线
-        sourceNode.on('moving', () => this.updateConnections());
-        targetNode.on('moving', () => this.updateConnections());
-    }
-
-    getNodeOutputPoint(node, port) {
-        const center = node.getCenterPoint();
-        const halfWidth = 60; // nodeWidth / 2
-        const halfHeight = 50; // nodeHeight / 2
-
-        if (node.nodeType === 'condition') {
-            return {
-                x: center.x + halfWidth,
-                y: port === 'true' ? center.y - halfHeight / 2 : center.y + halfHeight / 2
-            };
-        }
-        return { x: center.x + halfWidth, y: center.y };
-    }
-
-    getNodeInputPoint(node) {
-        const center = node.getCenterPoint();
-        const halfWidth = 60; // nodeWidth / 2
-        return { x: center.x - halfWidth, y: center.y };
-    }
-
-    createArrow(x, y, angle) {
-        const points = [
-            { x: x, y: y },
-            { x: x - 10, y: y - 5 },
-            { x: x - 10, y: y + 5 }
-        ];
-        return new fabric.Polygon(points, {
-            fill: '#666',
-            selectable: false,
-            evented: false
-        });
-    }
-
-    updateConnections() {
-        this.connections.forEach((conn, connId) => {
-            const sourcePoint = this.getNodeOutputPoint(conn.sourceNode, conn.line.sourcePort);
-            const targetPoint = this.getNodeInputPoint(conn.targetNode);
-
-            conn.line.set({
-                x1: sourcePoint.x,
-                y1: sourcePoint.y,
-                x2: targetPoint.x,
-                y2: targetPoint.y
-            });
-
-            // 更新箭头位置
-            conn.arrow.set({
-                left: targetPoint.x - 5,
-                top: targetPoint.y
-            });
-        });
-        this.canvas.renderAll();
-    }
-
-    onNodeSelected(e) {
-        const selected = e.selected[0];
-        if (selected && selected.nodeId) {
-            this.selectedNode = selected;
-            this.showProperties(selected);
-        }
-    }
-
-    onNodeDeselected() {
-        this.selectedNode = null;
-        this.hideProperties();
-    }
-
-    showProperties(node) {
+    showProperties(nodeData) {
         const propertiesPanel = document.getElementById('propertiesPanel');
-        const nodeType = node.nodeType;
-        const nodeData = node.nodeData;
+        if (!propertiesPanel) return;
 
-        // 生成属性表单
-        const formHtml = this.generatePropertyForm(nodeType, nodeData);
+        const nodeType = nodeData.properties?.nodeType || nodeData.type;
+        const properties = nodeData.properties || {};
+
+        const formHtml = this.generatePropertyForm(nodeType, properties);
         propertiesPanel.innerHTML = formHtml;
 
-        // 绑定表单事件
-        this.bindPropertyFormEvents(node);
+        this.bindPropertyFormEvents(nodeData);
+    }
+
+    showEdgeProperties(edgeData) {
+        const propertiesPanel = document.getElementById('propertiesPanel');
+        if (!propertiesPanel) return;
+
+        // 获取源节点和目标节点信息
+        const sourceNode = this.lf.getNodeModelById(edgeData.sourceNodeId);
+        const targetNode = this.lf.getNodeModelById(edgeData.targetNodeId);
+
+        let html = `<div class="property-form">`;
+        html += `<div class="property-section">`;
+        html += `<div class="property-section-title">连接线属性</div>`;
+
+        html += `<div class="form-group">`;
+        html += `<label>连接线名称</label>`;
+        html += `<input type="text" class="form-control" id="edgeName" value="${edgeData.text?.value || ''}" placeholder="输入连接线名称" />`;
+        html += `</div>`;
+
+        html += `<div class="form-group">`;
+        html += `<label>起始节点</label>`;
+        html += `<input type="text" class="form-control" value="${sourceNode?.text?.value || ''}" readonly />`;
+        html += `<small class="form-text text-muted">ID: ${edgeData.sourceNodeId}</small>`;
+        html += `</div>`;
+
+        html += `<div class="form-group">`;
+        html += `<label>目标节点</label>`;
+        html += `<input type="text" class="form-control" value="${targetNode?.text?.value || ''}" readonly />`;
+        html += `<small class="form-text text-muted">ID: ${edgeData.targetNodeId}</small>`;
+        html += `</div>`;
+
+        html += `<div class="form-group">`;
+        html += `<label>连接点</label>`;
+        html += `<div class="row">`;
+        html += `<div class="col-6">`;
+        html += `<small>起始: ${edgeData.sourceAnchorId || 'default'}</small>`;
+        html += `</div>`;
+        html += `<div class="col-6">`;
+        html += `<small>目标: ${edgeData.targetAnchorId || 'default'}</small>`;
+        html += `</div>`;
+        html += `</div>`;
+        html += `</div>`;
+
+        html += `</div>`;
+        html += `<button class="btn btn-danger btn-sm mt-3" id="deleteEdgeBtn">删除连接线</button>`;
+        html += `</div>`;
+
+        propertiesPanel.innerHTML = html;
+
+        // 绑定事件
+        const edgeNameInput = document.getElementById('edgeName');
+        if (edgeNameInput) {
+            edgeNameInput.addEventListener('change', (e) => {
+                this.lf.updateText(edgeData.id, e.target.value);
+            });
+        }
+
+        const deleteEdgeBtn = document.getElementById('deleteEdgeBtn');
+        if (deleteEdgeBtn) {
+            deleteEdgeBtn.addEventListener('click', () => {
+                if (confirm('确定要删除此连接线吗?')) {
+                    this.lf.deleteEdge(edgeData.id);
+                    this.hideProperties();
+                }
+            });
+        }
     }
 
     hideProperties() {
         const propertiesPanel = document.getElementById('propertiesPanel');
+        if (!propertiesPanel) return;
+
         propertiesPanel.innerHTML = `
             <div class="no-selection-message">
                 <i class="bi bi-info-circle"></i>
-                <p>请选择一个节点以编辑其属性</p>
+                <p>请选择一个节点或连接线以编辑其属性</p>
             </div>
         `;
     }
 
-    generatePropertyForm(nodeType, nodeData) {
-        // 根据节点类型生成不同的表单
-        // 这里使用简化版本，实际应用中应该更详细
+    generatePropertyForm(nodeType, properties) {
+        const configuration = properties.configuration || {};
+
         let html = `<div class="property-form">`;
         html += `<div class="property-section">`;
         html += `<div class="property-section-title">基本信息</div>`;
         html += `<div class="form-group">`;
         html += `<label>节点名称</label>`;
-        html += `<input type="text" class="form-control" id="propName" value="${nodeData.configuration.name || ''}" />`;
+        html += `<input type="text" class="form-control" id="propName" value="${configuration.name || properties.nodeName || ''}" />`;
         html += `<small class="form-text text-muted">名称不能包含点(.)字符</small>`;
         html += `</div>`;
         html += `</div>`;
 
-        // 根据节点类型添加特定属性
-        html += this.generateTypeSpecificProperties(nodeType, nodeData);
+        html += this.generateTypeSpecificProperties(nodeType, configuration);
 
         html += `<button class="btn btn-danger btn-sm mt-3" id="deleteNodeBtn">删除节点</button>`;
         html += `</div>`;
@@ -615,7 +490,7 @@ class WorkflowEditor {
         return html;
     }
 
-    generateTypeSpecificProperties(nodeType, nodeData) {
+    generateTypeSpecificProperties(nodeType, configuration) {
         let html = `<div class="property-section">`;
         html += `<div class="property-section-title">节点配置</div>`;
 
@@ -623,58 +498,58 @@ class WorkflowEditor {
             case 'trigger':
                 html += `<div class="form-group">`;
                 html += `<label>Cron表达式</label>`;
-                html += `<input type="text" class="form-control" id="propCronExpression" value="${nodeData.configuration.cronExpression || ''}" />`;
+                html += `<input type="text" class="form-control" id="propCronExpression" value="${configuration.cronExpression || ''}" />`;
                 html += `<small class="expression-hint">示例: 0 0 * * * (每天午夜执行)</small>`;
                 html += `</div>`;
                 break;
             case 'event':
                 html += `<div class="form-group">`;
                 html += `<label>事件主题</label>`;
-                html += `<input type="text" class="form-control" id="propEventTopic" value="${nodeData.configuration.eventTopic || ''}" />`;
+                html += `<input type="text" class="form-control" id="propEventTopic" value="${configuration.eventTopic || ''}" />`;
                 html += `</div>`;
                 break;
             case 'httpAuth':
             case 'httpAction':
                 html += `<div class="form-group">`;
                 html += `<label>URL</label>`;
-                html += `<input type="text" class="form-control" id="propUrl" value="${nodeData.configuration.url || nodeData.configuration.authUrl || ''}" />`;
+                html += `<input type="text" class="form-control" id="propUrl" value="${configuration.url || configuration.authUrl || ''}" />`;
                 html += `</div>`;
                 html += `<div class="form-group">`;
                 html += `<label>HTTP方法</label>`;
                 html += `<select class="form-select" id="propHttpMethod">`;
-                html += `<option value="GET" ${nodeData.configuration.httpMethod === 'GET' ? 'selected' : ''}>GET</option>`;
-                html += `<option value="POST" ${nodeData.configuration.httpMethod === 'POST' ? 'selected' : ''}>POST</option>`;
-                html += `<option value="PUT" ${nodeData.configuration.httpMethod === 'PUT' ? 'selected' : ''}>PUT</option>`;
-                html += `<option value="DELETE" ${nodeData.configuration.httpMethod === 'DELETE' ? 'selected' : ''}>DELETE</option>`;
+                html += `<option value="GET" ${configuration.httpMethod === 'GET' ? 'selected' : ''}>GET</option>`;
+                html += `<option value="POST" ${configuration.httpMethod === 'POST' ? 'selected' : ''}>POST</option>`;
+                html += `<option value="PUT" ${configuration.httpMethod === 'PUT' ? 'selected' : ''}>PUT</option>`;
+                html += `<option value="DELETE" ${configuration.httpMethod === 'DELETE' ? 'selected' : ''}>DELETE</option>`;
                 html += `</select>`;
                 html += `</div>`;
                 if (nodeType === 'httpAuth') {
                     html += `<div class="form-group">`;
                     html += `<label>授权类型</label>`;
                     html += `<select class="form-select" id="propAuthType">`;
-                    html += `<option value="None" ${nodeData.configuration.authType === 'None' ? 'selected' : ''}>None</option>`;
-                    html += `<option value="Basic" ${nodeData.configuration.authType === 'Basic' ? 'selected' : ''}>Basic</option>`;
-                    html += `<option value="Bearer" ${nodeData.configuration.authType === 'Bearer' ? 'selected' : ''}>Bearer</option>`;
-                    html += `<option value="ApiKey" ${nodeData.configuration.authType === 'ApiKey' ? 'selected' : ''}>ApiKey</option>`;
+                    html += `<option value="None" ${configuration.authType === 'None' ? 'selected' : ''}>None</option>`;
+                    html += `<option value="Basic" ${configuration.authType === 'Basic' ? 'selected' : ''}>Basic</option>`;
+                    html += `<option value="Bearer" ${configuration.authType === 'Bearer' ? 'selected' : ''}>Bearer</option>`;
+                    html += `<option value="ApiKey" ${configuration.authType === 'ApiKey' ? 'selected' : ''}>ApiKey</option>`;
                     html += `</select>`;
                     html += `</div>`;
                 }
                 html += `<div class="form-group">`;
                 html += `<label>断言表达式</label>`;
-                html += `<input type="text" class="form-control" id="propAssertionExpression" value="${nodeData.configuration.assertionExpression || ''}" />`;
+                html += `<input type="text" class="form-control" id="propAssertionExpression" value="${configuration.assertionExpression || ''}" />`;
                 html += `<small class="expression-hint">示例: \${response.status} == 200</small>`;
                 html += `</div>`;
                 break;
             case 'commandLine':
                 html += `<div class="form-group">`;
                 html += `<label>命令</label>`;
-                html += `<textarea class="form-control" id="propCommand" rows="3">${nodeData.configuration.command || ''}</textarea>`;
+                html += `<textarea class="form-control" id="propCommand" rows="3">${configuration.command || ''}</textarea>`;
                 html += `</div>`;
                 break;
             case 'condition':
                 html += `<div class="form-group">`;
                 html += `<label>条件表达式</label>`;
-                html += `<input type="text" class="form-control" id="propConditionExpression" value="${nodeData.configuration.conditionExpression || ''}" />`;
+                html += `<input type="text" class="form-control" id="propConditionExpression" value="${configuration.conditionExpression || ''}" />`;
                 html += `<small class="expression-hint">使用 \${组件名.属性} 引用其他节点的输出</small>`;
                 html += `</div>`;
                 break;
@@ -684,132 +559,96 @@ class WorkflowEditor {
         return html;
     }
 
-    bindPropertyFormEvents(node) {
-        // 绑定输入事件以更新节点数据
+    bindPropertyFormEvents(nodeData) {
         const inputs = document.querySelectorAll('#propertiesPanel input, #propertiesPanel select, #propertiesPanel textarea');
         inputs.forEach(input => {
             input.addEventListener('change', (e) => {
-                this.updateNodeData(node, e.target.id, e.target.value);
+                this.updateNodeData(nodeData, e.target.id, e.target.value);
             });
         });
 
-        // 删除节点按钮
         const deleteBtn = document.getElementById('deleteNodeBtn');
         if (deleteBtn) {
             deleteBtn.addEventListener('click', () => {
-                this.deleteNode(node);
+                if (confirm('确定要删除此节点吗?')) {
+                    this.lf.deleteNode(nodeData.id);
+                    this.hideProperties();
+                }
             });
         }
     }
 
-    updateNodeData(node, propertyId, value) {
+    updateNodeData(nodeData, propertyId, value) {
         const propertyName = propertyId.replace('prop', '');
         const key = propertyName.charAt(0).toLowerCase() + propertyName.slice(1);
 
-        node.nodeData.configuration[key] = value;
+        if (!nodeData.properties) {
+            nodeData.properties = {};
+        }
 
-        // 如果是名称，更新节点显示
+        if (!nodeData.properties.configuration) {
+            nodeData.properties.configuration = {};
+        }
+
+        nodeData.properties.configuration[key] = value;
+
         if (key === 'name') {
-            // 验证名称不包含点
             if (value.includes('.')) {
                 alert('节点名称不能包含点(.)字符');
                 return;
             }
-            node.nodeName = value;
-            // 找到标签对象（第三个对象，前两个是rect和icon）
-            const objects = node.getObjects();
-            const labelObj = objects.find((obj, index) => obj.type === 'text' && index > 0);
-            if (labelObj) {
-                labelObj.set('text', value);
-                this.canvas.renderAll();
+            nodeData.properties.nodeName = value;
+            nodeData.properties.label = value;
+            this.lf.updateText(nodeData.id, value);
+        }
+
+        // 更新节点模型
+        this.lf.setProperties(nodeData.id, nodeData.properties);
+    }
+
+    deleteSelected() {
+        if (this.selectedNode) {
+            if (confirm('确定要删除选中的节点吗?')) {
+                this.lf.deleteNode(this.selectedNode.id);
+                this.hideProperties();
+            }
+        } else if (this.selectedEdge) {
+            if (confirm('确定要删除选中的连接线吗?')) {
+                this.lf.deleteEdge(this.selectedEdge.id);
+                this.hideProperties();
             }
         }
     }
 
-    deleteNode(node) {
-        if (!confirm('确定要删除此节点吗？')) return;
-
-        // 删除相关的连接
-        this.connections.forEach((conn, connId) => {
-            if (conn.sourceNode.nodeId === node.nodeId || conn.targetNode.nodeId === node.nodeId) {
-                this.canvas.remove(conn.line);
-                this.canvas.remove(conn.arrow);
-                this.connections.delete(connId);
-            }
-        });
-
-        // 删除节点
-        this.canvas.remove(node);
-        this.nodes.delete(node.nodeId);
-        this.hideProperties();
-        this.canvas.renderAll();
-    }
-
     zoomIn() {
-        this.zoom = Math.min(this.zoom * 1.2, 3);
-        this.applyZoom();
+        this.lf.zoom(true);
+        this.updateZoomLevel();
     }
 
     zoomOut() {
-        this.zoom = Math.max(this.zoom / 1.2, 0.3);
-        this.applyZoom();
+        this.lf.zoom(false);
+        this.updateZoomLevel();
     }
 
-    applyZoom() {
-        this.canvas.setZoom(this.zoom);
-        document.getElementById('zoomLevel').textContent = `${Math.round(this.zoom * 100)}%`;
-        this.canvas.renderAll();
+    updateZoomLevel() {
+        const transform = this.lf.getTransform();
+        const zoom = transform ? (transform.SCALE_X || transform.scaleX || 1) : 1;
+        const zoomLevelEl = document.getElementById('zoomLevel');
+        if (zoomLevelEl) {
+            zoomLevelEl.textContent = `${Math.round(zoom * 100)}%`;
+        }
     }
 
     fitToScreen() {
-        const objects = this.canvas.getObjects().filter(obj => obj.nodeId);
-        if (objects.length === 0) return;
-
-        const group = new fabric.Group(objects);
-        const bounds = group.getBoundingRect();
-        group.destroy();
-
-        const canvasWidth = this.canvas.getWidth();
-        const canvasHeight = this.canvas.getHeight();
-
-        const scaleX = canvasWidth / (bounds.width + 100);
-        const scaleY = canvasHeight / (bounds.height + 100);
-        this.zoom = Math.min(scaleX, scaleY, 1);
-
-        this.applyZoom();
-        this.centerCanvas();
+        this.lf.fitView();
+        this.updateZoomLevel();
     }
 
     centerCanvas() {
-        const objects = this.canvas.getObjects().filter(obj => obj.nodeId);
-        if (objects.length === 0) return;
-
-        const group = new fabric.Group(objects);
-        const bounds = group.getBoundingRect();
-        group.destroy();
-
-        const canvasWidth = this.canvas.getWidth();
-        const canvasHeight = this.canvas.getHeight();
-
-        const centerX = canvasWidth / 2 / this.zoom;
-        const centerY = canvasHeight / 2 / this.zoom;
-
-        const boundsCenterX = bounds.left + bounds.width / 2;
-        const boundsCenterY = bounds.top + bounds.height / 2;
-
-        const deltaX = centerX - boundsCenterX;
-        const deltaY = centerY - boundsCenterY;
-
-        objects.forEach(obj => {
-            obj.set({
-                left: obj.left + deltaX,
-                top: obj.top + deltaY
-            });
-            obj.setCoords();
-        });
-
-        this.updateConnections();
-        this.canvas.renderAll();
+        const graphData = this.lf.getGraphData();
+        if (graphData.nodes.length > 0) {
+            this.lf.fitView();
+        }
     }
 
     saveWorkflow() {
@@ -828,29 +667,25 @@ class WorkflowEditor {
             return;
         }
 
-        // 收集节点数据
-        const nodesData = [];
-        this.nodes.forEach((node, nodeId) => {
-            nodesData.push({
-                nodeId: nodeId,
-                nodeType: node.nodeType,
-                name: node.nodeName,
-                positionX: node.left,
-                positionY: node.top,
-                configuration: JSON.stringify(node.nodeData.configuration)
-            });
-        });
+        const graphData = this.lf.getGraphData();
 
-        // 收集连接数据
-        const connectionsData = [];
-        this.connections.forEach((conn, connId) => {
-            connectionsData.push({
-                connectionId: connId,
-                sourceNodeId: conn.sourceNode.nodeId,
-                targetNodeId: conn.targetNode.nodeId,
-                sourcePort: conn.line.sourcePort || 'default'
-            });
-        });
+        // 转换节点数据
+        const nodesData = graphData.nodes.map(node => ({
+            nodeId: node.id,
+            nodeType: node.properties?.nodeType || node.type,
+            name: node.properties?.nodeName || node.text?.value || '',
+            positionX: node.x,
+            positionY: node.y,
+            configuration: JSON.stringify(node.properties?.configuration || {})
+        }));
+
+        // 转换连接数据
+        const connectionsData = graphData.edges.map(edge => ({
+            connectionId: edge.id,
+            sourceNodeId: edge.sourceNodeId,
+            targetNodeId: edge.targetNodeId,
+            sourcePort: edge.sourceAnchorId || 'default'
+        }));
 
         const workflowData = {
             customJobId: customJobId || '00000000-0000-0000-0000-000000000000',
@@ -861,7 +696,6 @@ class WorkflowEditor {
             connections: connectionsData
         };
 
-        // 发送到服务器
         fetch('/api/customjobs/workflow', {
             method: 'POST',
             headers: {
@@ -875,7 +709,7 @@ class WorkflowEditor {
         })
         .then(data => {
             alert('工作流保存成功！');
-            if (!customJobId) {
+            if (!customJobId || customJobId === '00000000-0000-0000-0000-000000000000') {
                 window.location.href = `/CustomJobs/WorkflowEditor/${data.customJobId}`;
             }
         })
@@ -886,7 +720,7 @@ class WorkflowEditor {
     }
 
     loadWorkflow() {
-        const customJobId = document.getElementById('customJobId').value;
+        const customJobId = document.getElementById('customJobId')?.value;
         if (!customJobId || customJobId === '00000000-0000-0000-0000-000000000000') {
             return;
         }
@@ -897,36 +731,59 @@ class WorkflowEditor {
                 return response.json();
             })
             .then(data => {
+                const nodes = [];
+                const edges = [];
+
                 // 加载节点
                 data.nodes.forEach(nodeData => {
-                    const node = this.createNode(
-                        nodeData.nodeType,
-                        nodeData.positionX,
-                        nodeData.positionY
-                    );
-                    node.nodeId = nodeData.nodeId;
-                    node.nodeName = nodeData.name;
-                    node.nodeData.configuration = JSON.parse(nodeData.configuration || '{}');
+                    const config = JSON.parse(nodeData.configuration || '{}');
+                    const nodeTypeConfig = this.nodeTypes[nodeData.nodeType];
 
-                    // 更新显示名称（找到标签对象，即第二个text对象）
-                    const objects = node.getObjects();
-                    const labelObj = objects.find((obj, index) => obj.type === 'text' && index > 0);
-                    if (labelObj) {
-                        labelObj.set('text', nodeData.name);
+                    nodes.push({
+                        id: nodeData.nodeId,
+                        type: nodeData.nodeType,
+                        x: nodeData.positionX,
+                        y: nodeData.positionY,
+                        text: nodeData.name,
+                        properties: {
+                            nodeId: nodeData.nodeId,
+                            nodeType: nodeData.nodeType,
+                            nodeName: nodeData.name,
+                            label: nodeData.name,
+                            icon: nodeTypeConfig?.icon,
+                            color: nodeTypeConfig?.color,
+                            configuration: config
+                        }
+                    });
+
+                    // 更新计数器
+                    const idNum = parseInt(nodeData.nodeId.replace('node_', ''));
+                    if (!isNaN(idNum) && idNum > this.nodeIdCounter) {
+                        this.nodeIdCounter = idNum;
                     }
                 });
 
                 // 加载连接
                 data.connections.forEach(connData => {
-                    const sourceNode = this.nodes.get(connData.sourceNodeId);
-                    const targetNode = this.nodes.get(connData.targetNodeId);
-                    if (sourceNode && targetNode) {
-                        this.createConnection(sourceNode, targetNode, connData.sourcePort);
+                    edges.push({
+                        id: connData.connectionId,
+                        type: 'polyline',
+                        sourceNodeId: connData.sourceNodeId,
+                        targetNodeId: connData.targetNodeId,
+                        sourceAnchorId: connData.sourcePort
+                    });
+
+                    // 更新计数器
+                    const idNum = parseInt(connData.connectionId.replace('conn_', ''));
+                    if (!isNaN(idNum) && idNum > this.connectionIdCounter) {
+                        this.connectionIdCounter = idNum;
                     }
                 });
 
-                this.canvas.renderAll();
-                this.fitToScreen();
+                this.lf.render({ nodes, edges });
+                setTimeout(() => {
+                    this.fitToScreen();
+                }, 100);
             })
             .catch(error => {
                 console.error('加载错误:', error);
@@ -936,5 +793,10 @@ class WorkflowEditor {
 
 // 初始化编辑器
 document.addEventListener('DOMContentLoaded', () => {
-    window.workflowEditor = new WorkflowEditor();
+    // 确保 LogicFlow 已加载
+    if (typeof LogicFlow !== 'undefined') {
+        window.workflowEditor = new WorkflowEditor();
+    } else {
+        console.error('LogicFlow 未加载，请检查脚本引用');
+    }
 });
