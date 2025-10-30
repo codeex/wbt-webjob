@@ -7,6 +7,34 @@
     border-radius: 4px;
     overflow: hidden;
     background-color: #f5f5f5;
+    position: relative;
+}
+
+/* 全屏模式 */
+.workflow-editor-container.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999;
+    border-radius: 0;
+    border: none;
+}
+
+.workflow-editor-container.fullscreen .workflow-left-panel,
+.workflow-editor-container.fullscreen .workflow-right-panel {
+    position: absolute;
+    height: 100%;
+    z-index: 10;
+}
+
+.workflow-editor-container.fullscreen .workflow-left-panel {
+    left: 0;
+}
+
+.workflow-editor-container.fullscreen .workflow-right-panel {
+    right: 0;
 }
 
 /* 左侧面板 */

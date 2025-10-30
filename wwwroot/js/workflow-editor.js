@@ -11,16 +11,16 @@ class WorkflowEditor {
         this.nodeIdCounter = 0;
         this.connectionIdCounter = 0;
 
-        // 节点类型配置
+        // 节点类型配置（使用Bootstrap Icons的Unicode）
         this.nodeTypes = {
-            start: { label: '开始', color: '#28a745', icon: '\uf04b', category: 'input' },
-            trigger: { label: '触发器', color: '#17a2b8', icon: '\uf017', category: 'input' },
-            event: { label: '事件', color: '#ffc107', icon: '\uf0f3', category: 'input' },
-            httpAuth: { label: 'HTTP授权', color: '#6f42c1', icon: '\uf084', category: 'process' },
-            httpAction: { label: 'HTTP处理', color: '#007bff', icon: '\uf0ec', category: 'process' },
-            commandLine: { label: '命令行', color: '#343a40', icon: '\uf120', category: 'process' },
-            condition: { label: '条件判断', color: '#fd7e14', icon: '\uf126', category: 'process' },
-            end: { label: '结束', color: '#dc3545', icon: '\uf28d', category: 'terminate' }
+            start: { label: '开始', color: '#28a745', icon: '▶', category: 'input' },
+            trigger: { label: '触发器', color: '#17a2b8', icon: '⏰', category: 'input' },
+            event: { label: '事件', color: '#ffc107', icon: '🔔', category: 'input' },
+            httpAuth: { label: 'HTTP授权', color: '#6f42c1', icon: '🔑', category: 'process' },
+            httpAction: { label: 'HTTP处理', color: '#007bff', icon: '⇄', category: 'process' },
+            commandLine: { label: '命令行', color: '#343a40', icon: '▣', category: 'process' },
+            condition: { label: '条件判断', color: '#fd7e14', icon: '◆', category: 'process' },
+            end: { label: '结束', color: '#dc3545', icon: '⬛', category: 'terminate' }
         };
 
         this.init();
@@ -56,12 +56,33 @@ class WorkflowEditor {
 
     initEvents() {
         // 左右面板切换
-        document.getElementById('toggleLeftPanel').addEventListener('click', () => {
+        document.getElementById('toggleLeftPanelBtn').addEventListener('click', () => {
             document.getElementById('leftPanel').classList.toggle('collapsed');
+            setTimeout(() => {
+                this.canvas.setWidth(document.getElementById('centerPanel').clientWidth);
+                this.canvas.setHeight(document.getElementById('centerPanel').clientHeight);
+                this.canvas.renderAll();
+            }, 300);
         });
 
-        document.getElementById('toggleRightPanel').addEventListener('click', () => {
+        document.getElementById('toggleRightPanelBtn').addEventListener('click', () => {
             document.getElementById('rightPanel').classList.toggle('collapsed');
+            setTimeout(() => {
+                this.canvas.setWidth(document.getElementById('centerPanel').clientWidth);
+                this.canvas.setHeight(document.getElementById('centerPanel').clientHeight);
+                this.canvas.renderAll();
+            }, 300);
+        });
+
+        // 全屏切换
+        document.getElementById('toggleFullscreenBtn').addEventListener('click', () => {
+            const container = document.getElementById('workflowEditorContainer');
+            container.classList.toggle('fullscreen');
+            setTimeout(() => {
+                this.canvas.setWidth(document.getElementById('centerPanel').clientWidth);
+                this.canvas.setHeight(document.getElementById('centerPanel').clientHeight);
+                this.canvas.renderAll();
+            }, 100);
         });
 
         // 画布控制按钮
@@ -141,13 +162,52 @@ class WorkflowEditor {
         const nodeId = `node_${++this.nodeIdCounter}`;
         const nodeName = `${config.label}${this.nodeIdCounter}`;
 
+        const nodeWidth = 120;
+        const nodeHeight = 100;
+
+        // 创建节点矩形
+        const rect = new fabric.Rect({
+            width: nodeWidth,
+            height: nodeHeight,
+            fill: config.color,
+            stroke: '#333',
+            strokeWidth: 2,
+            rx: 8,
+            ry: 8,
+            originX: 'center',
+            originY: 'center'
+        });
+
+        // 创建图标
+        const icon = new fabric.Text(config.icon, {
+            fontSize: 32,
+            fill: '#fff',
+            fontFamily: 'Arial',
+            originX: 'center',
+            originY: 'center',
+            top: -15
+        });
+
+        // 创建节点标签（在图标下方）
+        const label = new fabric.Text(nodeName, {
+            fontSize: 12,
+            fill: '#fff',
+            fontFamily: 'Arial',
+            originX: 'center',
+            originY: 'center',
+            top: 25
+        });
+
         // 创建节点组
-        const group = new fabric.Group([], {
+        const group = new fabric.Group([rect, icon, label], {
             left: x,
             top: y,
             selectable: true,
             hasControls: false,
             hasBorders: true,
+            borderColor: '#007bff',
+            borderScaleFactor: 2,
+            padding: 0,
             nodeId: nodeId,
             nodeType: nodeType,
             nodeName: nodeName,
@@ -157,33 +217,8 @@ class WorkflowEditor {
             }
         });
 
-        // 创建节点矩形
-        const rect = new fabric.Rect({
-            width: 150,
-            height: 80,
-            fill: config.color,
-            stroke: '#333',
-            strokeWidth: 2,
-            rx: 8,
-            ry: 8
-        });
-
-        // 创建节点标签
-        const label = new fabric.Text(nodeName, {
-            fontSize: 14,
-            fill: '#fff',
-            fontFamily: 'Arial',
-            originX: 'center',
-            originY: 'center',
-            top: 10
-        });
-
-        // 添加到组
-        group.addWithUpdate(rect);
-        group.addWithUpdate(label);
-
         // 添加连接点
-        this.addConnectionPoints(group, nodeType);
+        this.addConnectionPoints(group, nodeType, nodeWidth, nodeHeight);
 
         // 添加到画布
         this.canvas.add(group);
@@ -193,25 +228,31 @@ class WorkflowEditor {
         return group;
     }
 
-    addConnectionPoints(group, nodeType) {
+    addConnectionPoints(group, nodeType, nodeWidth, nodeHeight) {
         const config = this.nodeTypes[nodeType];
         const category = config.category;
 
-        // 输入点（除了输入组，其他都有）
+        const halfWidth = nodeWidth / 2;
+        const halfHeight = nodeHeight / 2;
+
+        // 输入点（除了输入组，其他都有） - 在左边边缘
         if (category !== 'input') {
             const inputPort = new fabric.Circle({
                 radius: 6,
                 fill: '#fff',
                 stroke: '#333',
                 strokeWidth: 2,
-                left: -75,
-                top: -3,
-                portType: 'input'
+                left: -halfWidth,  // 左边缘
+                top: 0,
+                originX: 'center',
+                originY: 'center',
+                portType: 'input',
+                selectable: false
             });
             group.addWithUpdate(inputPort);
         }
 
-        // 输出点
+        // 输出点 - 在右边边缘
         if (category !== 'terminate') {
             if (nodeType === 'condition') {
                 // 条件节点有两个输出：真和假
@@ -220,10 +261,13 @@ class WorkflowEditor {
                     fill: '#28a745',
                     stroke: '#333',
                     strokeWidth: 2,
-                    left: 69,
-                    top: -20,
+                    left: halfWidth,  // 右边缘
+                    top: -halfHeight / 2,
+                    originX: 'center',
+                    originY: 'center',
                     portType: 'output',
-                    portName: 'true'
+                    portName: 'true',
+                    selectable: false
                 });
 
                 const falsePort = new fabric.Circle({
@@ -231,10 +275,13 @@ class WorkflowEditor {
                     fill: '#dc3545',
                     stroke: '#333',
                     strokeWidth: 2,
-                    left: 69,
-                    top: 15,
+                    left: halfWidth,  // 右边缘
+                    top: halfHeight / 2,
+                    originX: 'center',
+                    originY: 'center',
                     portType: 'output',
-                    portName: 'false'
+                    portName: 'false',
+                    selectable: false
                 });
 
                 group.addWithUpdate(truePort);
@@ -246,9 +293,12 @@ class WorkflowEditor {
                     fill: '#fff',
                     stroke: '#333',
                     strokeWidth: 2,
-                    left: 69,
-                    top: -3,
-                    portType: 'output'
+                    left: halfWidth,  // 右边缘
+                    top: 0,
+                    originX: 'center',
+                    originY: 'center',
+                    portType: 'output',
+                    selectable: false
                 });
                 group.addWithUpdate(outputPort);
             }
@@ -356,18 +406,22 @@ class WorkflowEditor {
 
     getNodeOutputPoint(node, port) {
         const center = node.getCenterPoint();
+        const halfWidth = 60; // nodeWidth / 2
+        const halfHeight = 50; // nodeHeight / 2
+
         if (node.nodeType === 'condition') {
             return {
-                x: center.x + 75,
-                y: port === 'true' ? center.y - 20 : center.y + 20
+                x: center.x + halfWidth,
+                y: port === 'true' ? center.y - halfHeight / 2 : center.y + halfHeight / 2
             };
         }
-        return { x: center.x + 75, y: center.y };
+        return { x: center.x + halfWidth, y: center.y };
     }
 
     getNodeInputPoint(node) {
         const center = node.getCenterPoint();
-        return { x: center.x - 75, y: center.y };
+        const halfWidth = 60; // nodeWidth / 2
+        return { x: center.x - halfWidth, y: center.y };
     }
 
     createArrow(x, y, angle) {
@@ -434,7 +488,7 @@ class WorkflowEditor {
         const propertiesPanel = document.getElementById('propertiesPanel');
         propertiesPanel.innerHTML = `
             <div class="no-selection-message">
-                <i class="fas fa-info-circle"></i>
+                <i class="bi bi-info-circle"></i>
                 <p>请选择一个节点以编辑其属性</p>
             </div>
         `;
@@ -563,9 +617,11 @@ class WorkflowEditor {
                 return;
             }
             node.nodeName = value;
-            const textObj = node.getObjects().find(obj => obj.type === 'text');
-            if (textObj) {
-                textObj.set('text', value);
+            // 找到标签对象（第三个对象，前两个是rect和icon）
+            const objects = node.getObjects();
+            const labelObj = objects.find((obj, index) => obj.type === 'text' && index > 0);
+            if (labelObj) {
+                labelObj.set('text', value);
                 this.canvas.renderAll();
             }
         }
@@ -753,10 +809,11 @@ class WorkflowEditor {
                     node.nodeName = nodeData.name;
                     node.nodeData.configuration = JSON.parse(nodeData.configuration || '{}');
 
-                    // 更新显示名称
-                    const textObj = node.getObjects().find(obj => obj.type === 'text');
-                    if (textObj) {
-                        textObj.set('text', nodeData.name);
+                    // 更新显示名称（找到标签对象，即第二个text对象）
+                    const objects = node.getObjects();
+                    const labelObj = objects.find((obj, index) => obj.type === 'text' && index > 0);
+                    if (labelObj) {
+                        labelObj.set('text', nodeData.name);
                     }
                 });
 

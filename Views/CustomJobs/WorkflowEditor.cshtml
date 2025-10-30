@@ -10,11 +10,20 @@
             <h2>@ViewData["Title"]</h2>
         </div>
         <div class="col-auto">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleLeftPanelBtn" title="切换工具箱">
+                <i class="bi bi-layout-sidebar"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleRightPanelBtn" title="切换属性面板">
+                <i class="bi bi-layout-sidebar-reverse"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleFullscreenBtn" title="全屏">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
             <button type="button" class="btn btn-primary" id="saveWorkflowBtn">
-                <i class="fas fa-save"></i> 保存工作流
+                <i class="bi bi-save"></i> 保存工作流
             </button>
             <a asp-action="Index" class="btn btn-secondary">
-                <i class="fas fa-arrow-left"></i> 返回列表
+                <i class="bi bi-arrow-left"></i> 返回列表
             </a>
         </div>
     </div>
@@ -49,25 +58,22 @@
     </div>
 
     <!-- 三栏布局 -->
-    <div class="workflow-editor-container">
+    <div class="workflow-editor-container" id="workflowEditorContainer">
         <!-- 左侧工具栏 -->
         <div class="workflow-left-panel" id="leftPanel">
             <div class="panel-header">
                 <h5>组件工具箱</h5>
-                <button class="btn btn-sm btn-link" id="toggleLeftPanel">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
             </div>
             <div class="panel-body">
                 <!-- 操作组 -->
                 <div class="component-group">
                     <div class="group-title">操作工具</div>
                     <div class="component-item" data-node-type="select" data-category="action">
-                        <i class="fas fa-mouse-pointer"></i>
+                        <i class="bi bi-cursor"></i>
                         <span>选择</span>
                     </div>
                     <div class="component-item" data-node-type="connect" data-category="action">
-                        <i class="fas fa-link"></i>
+                        <i class="bi bi-diagram-3"></i>
                         <span>连接</span>
                     </div>
                 </div>
@@ -76,15 +82,15 @@
                 <div class="component-group">
                     <div class="group-title">输入节点</div>
                     <div class="component-item draggable" data-node-type="start" data-category="input">
-                        <i class="fas fa-play-circle"></i>
+                        <i class="bi bi-play-circle-fill"></i>
                         <span>开始</span>
                     </div>
                     <div class="component-item draggable" data-node-type="trigger" data-category="input">
-                        <i class="fas fa-clock"></i>
+                        <i class="bi bi-alarm"></i>
                         <span>触发器</span>
                     </div>
                     <div class="component-item draggable" data-node-type="event" data-category="input">
-                        <i class="fas fa-bell"></i>
+                        <i class="bi bi-bell-fill"></i>
                         <span>事件</span>
                     </div>
                 </div>
@@ -93,19 +99,19 @@
                 <div class="component-group">
                     <div class="group-title">处理节点</div>
                     <div class="component-item draggable" data-node-type="httpAuth" data-category="process">
-                        <i class="fas fa-key"></i>
+                        <i class="bi bi-key-fill"></i>
                         <span>HTTP授权</span>
                     </div>
                     <div class="component-item draggable" data-node-type="httpAction" data-category="process">
-                        <i class="fas fa-exchange-alt"></i>
+                        <i class="bi bi-arrow-left-right"></i>
                         <span>HTTP处理</span>
                     </div>
                     <div class="component-item draggable" data-node-type="commandLine" data-category="process">
-                        <i class="fas fa-terminal"></i>
+                        <i class="bi bi-terminal-fill"></i>
                         <span>命令行</span>
                     </div>
                     <div class="component-item draggable" data-node-type="condition" data-category="process">
-                        <i class="fas fa-code-branch"></i>
+                        <i class="bi bi-question-diamond-fill"></i>
                         <span>条件判断</span>
                     </div>
                 </div>
@@ -114,7 +120,7 @@
                 <div class="component-group">
                     <div class="group-title">终止节点</div>
                     <div class="component-item draggable" data-node-type="end" data-category="terminate">
-                        <i class="fas fa-stop-circle"></i>
+                        <i class="bi bi-stop-circle-fill"></i>
                         <span>结束</span>
                     </div>
                 </div>
@@ -125,16 +131,16 @@
         <div class="workflow-center-panel" id="centerPanel">
             <div class="canvas-toolbar">
                 <button class="btn btn-sm btn-outline-secondary" id="zoomInBtn" title="放大">
-                    <i class="fas fa-search-plus"></i>
+                    <i class="bi bi-zoom-in"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-secondary" id="zoomOutBtn" title="缩小">
-                    <i class="fas fa-search-minus"></i>
+                    <i class="bi bi-zoom-out"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-secondary" id="fitToScreenBtn" title="适应屏幕">
-                    <i class="fas fa-expand"></i>
+                    <i class="bi bi-aspect-ratio"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-secondary" id="centerCanvasBtn" title="居中">
-                    <i class="fas fa-crosshairs"></i>
+                    <i class="bi bi-bullseye"></i>
                 </button>
                 <span class="zoom-level" id="zoomLevel">100%</span>
             </div>
@@ -145,13 +151,10 @@
         <div class="workflow-right-panel" id="rightPanel">
             <div class="panel-header">
                 <h5>属性编辑器</h5>
-                <button class="btn btn-sm btn-link" id="toggleRightPanel">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
             </div>
             <div class="panel-body" id="propertiesPanel">
                 <div class="no-selection-message">
-                    <i class="fas fa-info-circle"></i>
+                    <i class="bi bi-info-circle"></i>
                     <p>请选择一个节点以编辑其属性</p>
                 </div>
             </div>
