@@ -100,7 +100,7 @@
 
 <div class="wizard-container">
     <h2 class="mb-4">
-        <i class="bi bi-magic"></i> 创建定制任务 - 向导模式
+        <i class="bi bi-magic"></i> @(ViewData["IsEditMode"] as bool? == true ? "编辑定制任务" : "创建定制任务") - 向导模式
     </h2>
 
     <!-- 步骤指示器 -->
@@ -127,6 +127,7 @@
     <form asp-action="CreateWizard" method="post" id="wizardForm">
         @Html.AntiForgeryToken()
         @Html.HiddenFor(m => m.CurrentStep)
+        @Html.HiddenFor(m => m.CustomJobId)
 
         <!-- 保留所有字段的隐藏输入，以便在步骤间传递数据 -->
         @if (Model.CurrentStep != 1)

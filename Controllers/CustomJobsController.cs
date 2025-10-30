@@ -67,12 +67,33 @@ public class CustomJobsController : Controller
     }
 
     // GET: /CustomJobs/CreateWizard
-    public IActionResult CreateWizard(int step = 1)
+    public async Task<IActionResult> CreateWizard(int step = 1, Guid? id = null)
     {
-        var model = new CustomJobWizardViewModel
+        CustomJobWizardViewModel model;
+
+        // 如果提供了id，则为编辑模式
+        if (id.HasValue)
         {
-            CurrentStep = step
-        };
+            var customJobs = await _customJobService.GetAllCustomJobsAsync(activeOnly: false);
+            var customJob = customJobs.FirstOrDefault(j => j.CustomJobId == id.Value);
+
+            if (customJob == null)
+            {
+                return NotFound();
+            }
+
+            model = CustomJobWizardViewModel.FromCustomJob(customJob);
+            model.CurrentStep = step;
+            ViewData["IsEditMode"] = true;
+        }
+        else
+        {
+            model = new CustomJobWizardViewModel
+            {
+                CurrentStep = step
+            };
+            ViewData["IsEditMode"] = false;
+        }
 
         // 从TempData恢复数据（如果有）
         if (TempData["WizardData"] is string wizardDataJson)
@@ -134,16 +155,29 @@ public class CustomJobsController : Controller
             try
             {
                 var customJob = model.ToCustomJob();
-                await _customJobService.CreateCustomJobAsync(customJob);
+
+                // 判断是编辑还是创建
+                if (model.CustomJobId.HasValue)
+                {
+                    // 编辑模式
+                    customJob.UpdatedAt = DateTime.UtcNow;
+                    await _customJobService.UpdateCustomJobAsync(customJob);
+                    TempData["SuccessMessage"] = "定制任务更新成功！";
+                }
+                else
+                {
+                    // 创建模式
+                    await _customJobService.CreateCustomJobAsync(customJob);
+                    TempData["SuccessMessage"] = "定制任务创建成功！";
+                }
 
                 TempData.Remove("WizardData");
-                TempData["SuccessMessage"] = "定制任务创建成功！";
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "创建定制任务失败");
-                ModelState.AddModelError("", "创建失败: " + ex.Message);
+                _logger.LogError(ex, model.CustomJobId.HasValue ? "更新定制任务失败" : "创建定制任务失败");
+                ModelState.AddModelError("", (model.CustomJobId.HasValue ? "更新" : "创建") + "失败: " + ex.Message);
                 return View(model);
             }
         }

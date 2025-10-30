@@ -11,14 +11,9 @@
         </h2>
     </div>
     <div class="col text-end">
-        <div class="btn-group">
-            <a href="@Url.Action("CreateWizard")" class="btn btn-primary">
-                <i class="bi bi-magic"></i> 向导模式创建
-            </a>
-            <a href="@Url.Action("Create")" class="btn btn-outline-primary">
-                <i class="bi bi-plus-circle"></i> 快速创建
-            </a>
-        </div>
+        <a href="@Url.Action("CreateWizard")" class="btn btn-primary">
+            <i class="bi bi-magic"></i> 创建定制任务
+        </a>
     </div>
 </div>
 
@@ -53,7 +48,6 @@
                 <table class="table table-hover">
                     <thead class="table-light">
                         <tr>
-                            <th>状态</th>
                             <th>任务名称</th>
                             <th>任务类型</th>
                             <th>HTTP方法</th>
@@ -67,12 +61,7 @@
                     <tbody>
                         @foreach (var job in Model)
                         {
-                            <tr class="@(job.IsActive ? "" : "table-secondary")">
-                                <td>
-                                    <span class="badge @(job.IsActive ? "bg-success" : "bg-secondary")">
-                                        @(job.IsActive ? "已启用" : "已禁用")
-                                    </span>
-                                </td>
+                            <tr>
                                 <td>
                                     <strong>@job.Name</strong>
                                 </td>
@@ -94,7 +83,7 @@
                                     @if (job.EnableSchedule && !string.IsNullOrEmpty(job.CronExpression))
                                     {
                                         <span class="badge bg-success" title="@job.CronExpression">
-                                            <i class="bi bi-clock"></i> 已启用
+                                            <i class="bi bi-clock"></i> 已启动
                                         </span>
                                     }
                                     else
@@ -107,23 +96,30 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
-                                        @if (job.IsActive)
+                                        <button type="button"
+                                                class="btn btn-primary btn-test"
+                                                data-job-id="@job.CustomJobId"
+                                                data-job-name="@job.Name"
+                                                title="测试执行（仅执行一次）">
+                                            <i class="bi bi-play-circle"></i> 测试
+                                        </button>
+                                        <button type="button"
+                                                class="btn btn-success btn-execute"
+                                                data-job-id="@job.CustomJobId"
+                                                data-job-name="@job.Name"
+                                                data-cron="@job.CronExpression"
+                                                data-enable-schedule="@job.EnableSchedule.ToString().ToLower()"
+                                                title="按照Cron表达式定时执行">
+                                            <i class="bi bi-clock"></i> 执行
+                                        </button>
+                                        @if (job.EnableSchedule && !string.IsNullOrEmpty(job.CronExpression))
                                         {
                                             <button type="button"
-                                                    class="btn btn-primary btn-test"
+                                                    class="btn btn-warning btn-stop-schedule"
                                                     data-job-id="@job.CustomJobId"
                                                     data-job-name="@job.Name"
-                                                    title="测试执行（仅执行一次）">
-                                                <i class="bi bi-play-circle"></i> 测试
-                                            </button>
-                                            <button type="button"
-                                                    class="btn btn-success btn-execute"
-                                                    data-job-id="@job.CustomJobId"
-                                                    data-job-name="@job.Name"
-                                                    data-cron="@job.CronExpression"
-                                                    data-enable-schedule="@job.EnableSchedule.ToString().ToLower()"
-                                                    title="按照Cron表达式定时执行">
-                                                <i class="bi bi-clock"></i> 执行
+                                                    title="停止调度">
+                                                <i class="bi bi-stop-circle"></i> 停止
                                             </button>
                                         }
                                         <a href="@Url.Action("JobLogs", new { customJobId = job.CustomJobId })"
@@ -136,17 +132,11 @@
                                            title="查看详情">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        <a href="@Url.Action("Edit", new { id = job.CustomJobId })"
+                                        <a href="@Url.Action("CreateWizard", new { id = job.CustomJobId })"
                                            class="btn btn-warning"
                                            title="编辑">
                                             <i class="bi bi-pencil"></i>
                                         </a>
-                                        <button type="button"
-                                                class="btn btn-@(job.IsActive ? "secondary" : "primary") btn-toggle"
-                                                data-job-id="@job.CustomJobId"
-                                                title="@(job.IsActive ? "禁用" : "启用")">
-                                            <i class="bi bi-@(job.IsActive ? "pause" : "play")"></i>
-                                        </button>
                                         <button type="button"
                                                 class="btn btn-danger btn-delete"
                                                 data-job-id="@job.CustomJobId"
@@ -205,14 +195,79 @@
                 <div class="alert alert-warning">
                     <i class="bi bi-clock"></i> 定时模式将在Hangfire中创建定时任务，按照Cron表达式定期执行
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Cron表达式</label>
-                    <input type="text" class="form-control" id="executeCron" placeholder="0 */5 * * *">
-                    <small class="text-muted">当前任务的Cron表达式: <span id="currentCron"></span></small>
+
+                <!-- Cron表达式配置 -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-clock-history"></i> 快速设置
+                    </div>
+                    <div class="card-body">
+                        <div class="btn-group-vertical btn-group-sm w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary cron-preset-execute" data-cron="0 * * * *">每小时执行一次</button>
+                            <button type="button" class="btn btn-outline-primary cron-preset-execute" data-cron="0 0 * * *">每天执行一次（午夜）</button>
+                            <button type="button" class="btn btn-outline-primary cron-preset-execute" data-cron="0 9 * * *">每天上午9点执行</button>
+                            <button type="button" class="btn btn-outline-primary cron-preset-execute" data-cron="0 0 * * 1">每周一执行（午夜）</button>
+                            <button type="button" class="btn btn-outline-primary cron-preset-execute" data-cron="0 0 1 * *">每月1号执行（午夜）</button>
+                            <button type="button" class="btn btn-outline-primary cron-preset-execute" data-cron="*/5 * * * *">每5分钟执行一次</button>
+                            <button type="button" class="btn btn-outline-primary cron-preset-execute" data-cron="0 */2 * * *">每2小时执行一次</button>
+                        </div>
+                    </div>
                 </div>
+
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-gear"></i> 自定义配置
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">分钟</label>
+                                <input type="text" class="form-control form-control-sm cron-field-execute" id="executeCronMinute" placeholder="*" />
+                                <small class="text-muted">0-59 或 * 或 */5</small>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">小时</label>
+                                <input type="text" class="form-control form-control-sm cron-field-execute" id="executeCronHour" placeholder="*" />
+                                <small class="text-muted">0-23 或 * 或 */2</small>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">日</label>
+                                <input type="text" class="form-control form-control-sm cron-field-execute" id="executeCronDay" placeholder="*" />
+                                <small class="text-muted">1-31 或 *</small>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">月</label>
+                                <input type="text" class="form-control form-control-sm cron-field-execute" id="executeCronMonth" placeholder="*" />
+                                <small class="text-muted">1-12 或 *</small>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label">周</label>
+                                <input type="text" class="form-control form-control-sm cron-field-execute" id="executeCronWeek" placeholder="*" />
+                                <small class="text-muted">0-6 (0=周日)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-code-square"></i> 生成的Cron表达式
+                    </div>
+                    <div class="card-body">
+                        <input type="text" class="form-control font-monospace" id="executeCron" readonly placeholder="0 * * * *" />
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-info-circle"></i> 格式: 分钟 小时 日 月 周
+                        </small>
+                        <div id="executeCronDescription" class="mt-1 text-primary small"></div>
+                        <small class="text-muted d-block mt-1">当前任务的Cron: <span id="currentCron"></span></small>
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label">任务参数 (JSON格式，可选)</label>
-                    <textarea class="form-control" id="executeParameters" rows="5" placeholder='{"key": "value"}'></textarea>
+                    <textarea class="form-control" id="executeParameters" rows="3" placeholder='{"key": "value"}'></textarea>
                     <small class="text-muted">请输入有效的JSON格式参数，如果不需要参数请留空</small>
                 </div>
             </div>
@@ -229,6 +284,72 @@
 @section Scripts {
     <script>
         let currentJobId = null;
+
+        // Cron表达式更新函数（用于执行模态框）
+        function updateExecuteCronExpression() {
+            const minute = $('#executeCronMinute').val() || '*';
+            const hour = $('#executeCronHour').val() || '*';
+            const day = $('#executeCronDay').val() || '*';
+            const month = $('#executeCronMonth').val() || '*';
+            const week = $('#executeCronWeek').val() || '*';
+
+            const cronExpr = minute + ' ' + hour + ' ' + day + ' ' + month + ' ' + week;
+            $('#executeCron').val(cronExpr);
+
+            // 生成描述
+            const description = generateCronDescription(minute, hour, day, month, week);
+            $('#executeCronDescription').text(description);
+        }
+
+        // 生成Cron表达式的可读描述
+        function generateCronDescription(minute, hour, day, month, week) {
+            const parts = [];
+
+            if (minute === '*' && hour === '*' && day === '*' && month === '*' && week === '*') {
+                return '每分钟执行一次';
+            }
+
+            // 分钟
+            if (minute.startsWith('*/')) {
+                parts.push('每' + minute.substring(2) + '分钟');
+            } else if (minute !== '*') {
+                parts.push('第' + minute + '分钟');
+            }
+
+            // 小时
+            if (hour.startsWith('*/')) {
+                parts.push('每' + hour.substring(2) + '小时');
+            } else if (hour !== '*') {
+                parts.push(hour + '点');
+            }
+
+            // 日
+            if (day !== '*') {
+                parts.push('每月' + day + '号');
+            }
+
+            // 月
+            if (month !== '*') {
+                parts.push(month + '月');
+            }
+
+            // 周
+            if (week !== '*') {
+                const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+                const weekNum = parseInt(week);
+                if (!isNaN(weekNum) && weekNum >= 0 && weekNum <= 6) {
+                    parts.push(weekNames[weekNum]);
+                } else {
+                    parts.push('每' + week);
+                }
+            }
+
+            if (parts.length === 0) {
+                return '自定义表达式';
+            }
+
+            return parts.join('，') + '执行';
+        }
 
         // 测试任务（一次性执行）
         $('.btn-test').click(function() {
@@ -281,14 +402,27 @@
             const enableSchedule = $(this).data('enable-schedule');
 
             $('#executeJobName').text(jobName);
-            $('#executeCron').val(cronExpression || '');
             $('#currentCron').text(cronExpression || '未设置');
             $('#executeParameters').val('');
 
-            if (!cronExpression) {
-                $('#executeCron').val('0 */5 * * *'); // 默认每5分钟
+            // 解析并填充cron字段
+            if (cronExpression) {
+                const parts = cronExpression.split(' ');
+                $('#executeCronMinute').val(parts[0] || '*');
+                $('#executeCronHour').val(parts[1] || '*');
+                $('#executeCronDay').val(parts[2] || '*');
+                $('#executeCronMonth').val(parts[3] || '*');
+                $('#executeCronWeek').val(parts[4] || '*');
+            } else {
+                // 默认每5分钟
+                $('#executeCronMinute').val('*/5');
+                $('#executeCronHour').val('*');
+                $('#executeCronDay').val('*');
+                $('#executeCronMonth').val('*');
+                $('#executeCronWeek').val('*');
             }
 
+            updateExecuteCronExpression();
             $('#executeModal').modal('show');
         });
 
@@ -336,19 +470,20 @@
             });
         });
 
-        // 切换启用/禁用状态
-        $('.btn-toggle').click(function() {
+        // 停止调度
+        $('.btn-stop-schedule').click(function() {
             const jobId = $(this).data('job-id');
-            const btn = $(this);
+            const jobName = $(this).data('job-name');
 
-            if (!confirm('确定要切换任务状态吗？')) {
+            if (!confirm('确定要停止任务 "' + jobName + '" 的调度吗？这将从Hangfire中删除定时任务。')) {
                 return;
             }
 
             $.ajax({
-                url: '/CustomJobs/ToggleActive/' + jobId,
+                url: '/CustomJobs/StopSchedule/' + jobId,
                 method: 'POST',
                 success: function(response) {
+                    alert('调度已停止');
                     location.reload();
                 },
                 error: function(xhr) {
@@ -370,6 +505,29 @@
             form.append('@Html.AntiForgeryToken()');
             $('body').append(form);
             form.submit();
+        });
+
+        // 监听执行模态框中的cron字段变化
+        $('.cron-field-execute').on('input', function() {
+            updateExecuteCronExpression();
+        });
+
+        // 快速设置按钮（执行模态框）
+        $('.cron-preset-execute').on('click', function() {
+            const cronExpr = $(this).data('cron');
+            const parts = cronExpr.split(' ');
+
+            $('#executeCronMinute').val(parts[0] || '*');
+            $('#executeCronHour').val(parts[1] || '*');
+            $('#executeCronDay').val(parts[2] || '*');
+            $('#executeCronMonth').val(parts[3] || '*');
+            $('#executeCronWeek').val(parts[4] || '*');
+
+            updateExecuteCronExpression();
+
+            // 高亮选中的按钮
+            $('.cron-preset-execute').removeClass('active');
+            $(this).addClass('active');
         });
     </script>
 }

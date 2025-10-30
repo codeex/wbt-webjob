@@ -53,20 +53,16 @@ public class HangfireJobService : IHangfireJobService
 
         var recurringJobId = $"CustomJob_{customJobId}";
 
-        // 设置显示名称：任务名称 + 任务ID
-        var displayName = $"{customJob.Name} (ID: {customJobId})";
-
         RecurringJob.AddOrUpdate(
             recurringJobId,
             () => ExecuteCustomJobAsync(customJobId, parameters),
             cronExpression,
             new RecurringJobOptions
             {
-                TimeZone = TimeZoneInfo.Local,
-                DisplayName = displayName
+                TimeZone = TimeZoneInfo.Local
             });
 
-        _logger.LogInformation($"Scheduled recurring job for CustomJob {customJobId}, RecurringJobId: {recurringJobId}, DisplayName: {displayName}, Cron: {cronExpression}");
+        _logger.LogInformation($"Scheduled recurring job for CustomJob {customJobId} ({customJob.Name}), RecurringJobId: {recurringJobId}, Cron: {cronExpression}");
         return recurringJobId;
     }
 
