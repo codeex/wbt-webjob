@@ -1,0 +1,280 @@
+@model WbtWebJob.Models.Workflow
+
+@{
+    ViewData["Title"] = $"工作流详情 - {Model.Name}";
+}
+
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="bi bi-diagram-3"></i> 工作流详情
+        </h2>
+    </div>
+    <div class="col text-end">
+        <a href="@Url.Action("Editor", new { id = Model.WorkflowId })" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> 编辑
+        </a>
+        <a href="@Url.Action("DownloadXml", new { id = Model.WorkflowId })" class="btn btn-success">
+            <i class="bi bi-download"></i> 下载XML
+        </a>
+        <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<!-- 基本信息卡片 -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-info-circle"></i> 基本信息
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table table-borderless">
+                    <tr>
+                        <th style="width: 150px;">工作流ID:</th>
+                        <td><code>@Model.WorkflowId</code></td>
+                    </tr>
+                    <tr>
+                        <th>名称:</th>
+                        <td><strong>@Model.Name</strong></td>
+                    </tr>
+                    <tr>
+                        <th>描述:</th>
+                        <td>@(Model.Description ?? "-")</td>
+                    </tr>
+                    <tr>
+                        <th>版本:</th>
+                        <td><span class="badge bg-secondary">v@Model.Version</span></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-borderless">
+                    <tr>
+                        <th style="width: 150px;">状态:</th>
+                        <td>
+                            @if (Model.IsActive)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> 启用
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-pause-circle"></i> 禁用
+                                </span>
+                            }
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>定时调度:</th>
+                        <td>
+                            @if (Model.EnableSchedule)
+                            {
+                                <span class="badge bg-primary">已启用</span>
+                                <br><small>Cron: <code>@Model.CronExpression</code></small>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">未启用</span>
+                            }
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>创建时间:</th>
+                        <td>@Model.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    </tr>
+                    <tr>
+                        <th>更新时间:</th>
+                        <td>@(Model.UpdatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-primary">@Model.Nodes.Count</h3>
+                <p class="text-muted mb-0">节点数量</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-success">@Model.Edges.Count</h3>
+                <p class="text-muted mb-0">连接数量</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-info">@Model.Nodes.Select(n => n.NodeType).Distinct().Count()</h3>
+                <p class="text-muted mb-0">节点类型</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 节点列表 -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-box"></i> 节点列表 (@Model.Nodes.Count)
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (!Model.Nodes.Any())
+        {
+            <p class="text-muted text-center">暂无节点</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>节点ID</th>
+                            <th>节点名称</th>
+                            <th>节点类型</th>
+                            <th>位置</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var node in Model.Nodes.OrderBy(n => n.CreatedAt))
+                        {
+                            <tr>
+                                <td><code>@node.NodeId.ToString().Substring(0, 8)...</code></td>
+                                <td><strong>@node.Name</strong></td>
+                                <td>
+                                    @switch (node.NodeType)
+                                    {
+                                        case "StartNode":
+                                            <span class="badge bg-success">开始节点</span>
+                                            break;
+                                        case "EndNode":
+                                            <span class="badge bg-danger">结束节点</span>
+                                            break;
+                                        case "HttpRequest":
+                                            <span class="badge bg-primary">HTTP请求</span>
+                                            break;
+                                        case "Condition":
+                                            <span class="badge bg-warning text-dark">条件判断</span>
+                                            break;
+                                        case "Delay":
+                                            <span class="badge bg-info">延迟等待</span>
+                                            break;
+                                        default:
+                                            <span class="badge bg-secondary">@node.NodeType</span>
+                                            break;
+                                    }
+                                </td>
+                                <td><small>X: @node.PositionX, Y: @node.PositionY</small></td>
+                                <td><small>@node.CreatedAt.ToString("yyyy-MM-dd HH:mm")</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- 连接列表 -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-arrow-left-right"></i> 连接列表 (@Model.Edges.Count)
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (!Model.Edges.Any())
+        {
+            <p class="text-muted text-center">暂无连接</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>连接ID</th>
+                            <th>源节点</th>
+                            <th></th>
+                            <th>目标节点</th>
+                            <th>标签</th>
+                            <th>条件</th>
+                            <th>优先级</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var edge in Model.Edges.OrderBy(e => e.Priority))
+                        {
+                            var sourceNode = Model.Nodes.FirstOrDefault(n => n.NodeId == edge.SourceNodeId);
+                            var targetNode = Model.Nodes.FirstOrDefault(n => n.NodeId == edge.TargetNodeId);
+
+                            <tr>
+                                <td><code>@edge.EdgeId.ToString().Substring(0, 8)...</code></td>
+                                <td>
+                                    <span class="badge bg-secondary">@(sourceNode?.Name ?? "Unknown")</span>
+                                </td>
+                                <td class="text-center">
+                                    <i class="bi bi-arrow-right text-primary"></i>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">@(targetNode?.Name ?? "Unknown")</span>
+                                </td>
+                                <td>@(edge.Label ?? "-")</td>
+                                <td><small>@(edge.Condition ?? "-")</small></td>
+                                <td>@edge.Priority</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- XML内容 -->
+@if (!string.IsNullOrEmpty(Model.XmlContent))
+{
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">
+                <i class="bi bi-file-earmark-code"></i> XML内容
+            </h5>
+        </div>
+        <div class="card-body">
+            <pre class="bg-light p-3" style="max-height: 400px; overflow-y: auto;"><code>@Model.XmlContent</code></pre>
+            <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyXml()">
+                <i class="bi bi-clipboard"></i> 复制XML
+            </button>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        function copyXml() {
+            const xmlContent = document.querySelector('pre code').textContent;
+            navigator.clipboard.writeText(xmlContent).then(function() {
+                alert('XML内容已复制到剪贴板');
+            }, function(err) {
+                alert('复制失败: ' + err);
+            });
+        }
+    </script>
+}

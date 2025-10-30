@@ -94,6 +94,10 @@ builder.Services.AddScoped<IJobExecutor, JobExecutor>();
 builder.Services.AddScoped<IHangfireJobService, HangfireJobService>();
 builder.Services.AddScoped<DetailedMigrationDiagnosticService>();
 
+// 注册DAG工作流服务
+builder.Services.AddScoped<IWorkflowService, WorkflowService>();
+builder.Services.AddScoped<IWorkflowXmlService, WorkflowXmlService>();
+
 var app = builder.Build();
 
 // 配置HTTP请求管道

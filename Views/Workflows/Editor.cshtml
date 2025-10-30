@@ -1,0 +1,618 @@
+@model WbtWebJob.Models.Workflow
+
+@{
+    ViewData["Title"] = Model == null ? "创建工作流" : $"编辑工作流 - {Model.Name}";
+    var isEditMode = Model != null;
+}
+
+<style>
+    #workflow-canvas {
+        position: relative;
+        width: 100%;
+        height: 700px;
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        overflow: auto;
+    }
+
+    .workflow-node {
+        position: absolute;
+        width: 150px;
+        min-height: 80px;
+        background: white;
+        border: 2px solid #0d6efd;
+        border-radius: 8px;
+        padding: 10px;
+        cursor: move;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s;
+    }
+
+    .workflow-node:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        transform: translateY(-2px);
+    }
+
+    .workflow-node.selected {
+        border-color: #ffc107;
+        border-width: 3px;
+    }
+
+    .workflow-node.start-node {
+        border-color: #28a745;
+        background: #d4edda;
+    }
+
+    .workflow-node.end-node {
+        border-color: #dc3545;
+        background: #f8d7da;
+    }
+
+    .workflow-node.http-node {
+        border-color: #0d6efd;
+        background: #cfe2ff;
+    }
+
+    .workflow-node.condition-node {
+        border-color: #fd7e14;
+        background: #ffe5d0;
+    }
+
+    .workflow-node .node-header {
+        font-weight: bold;
+        font-size: 0.85rem;
+        margin-bottom: 5px;
+        color: #333;
+    }
+
+    .workflow-node .node-type {
+        font-size: 0.7rem;
+        color: #6c757d;
+        text-transform: uppercase;
+    }
+
+    .workflow-node .node-actions {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        display: none;
+    }
+
+    .workflow-node:hover .node-actions {
+        display: block;
+    }
+
+    .node-palette {
+        position: sticky;
+        top: 20px;
+    }
+
+    .node-type-btn {
+        width: 100%;
+        text-align: left;
+        margin-bottom: 10px;
+        padding: 10px;
+        cursor: pointer;
+    }
+
+    .toolbar {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .config-panel {
+        position: sticky;
+        top: 20px;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        max-height: 700px;
+        overflow-y: auto;
+    }
+</style>
+
+<div class="row mb-3">
+    <div class="col">
+        <h2>
+            <i class="bi bi-diagram-3"></i> @ViewData["Title"]
+        </h2>
+    </div>
+</div>
+
+<!-- 工具栏 -->
+<div class="toolbar">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text">工作流名称</span>
+                <input type="text" class="form-control" id="workflowName"
+                       value="@(Model?.Name ?? "")" placeholder="输入工作流名称">
+            </div>
+        </div>
+        <div class="col-md-6 text-end">
+            <button class="btn btn-success" id="saveBtn">
+                <i class="bi bi-save"></i> 保存工作流
+            </button>
+            <button class="btn btn-primary" id="saveXmlBtn">
+                <i class="bi bi-file-earmark-code"></i> 保存为XML
+            </button>
+            <button class="btn btn-warning" id="validateBtn">
+                <i class="bi bi-check-circle"></i> 验证
+            </button>
+            <button class="btn btn-secondary" id="clearBtn">
+                <i class="bi bi-trash"></i> 清空画布
+            </button>
+            <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回
+            </a>
+        </div>
+    </div>
+    <div class="row mt-2">
+        <div class="col">
+            <input type="text" class="form-control" id="workflowDescription"
+                   value="@(Model?.Description ?? "")" placeholder="工作流描述（可选）">
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 左侧：节点类型面板 -->
+    <div class="col-md-2">
+        <div class="node-palette">
+            <h5 class="mb-3">节点类型</h5>
+
+            <button class="btn btn-outline-success node-type-btn" data-node-type="StartNode">
+                <i class="bi bi-play-circle"></i> 开始节点
+            </button>
+
+            <button class="btn btn-outline-primary node-type-btn" data-node-type="HttpRequest">
+                <i class="bi bi-globe"></i> HTTP请求
+            </button>
+
+            <button class="btn btn-outline-warning node-type-btn" data-node-type="Condition">
+                <i class="bi bi-question-diamond"></i> 条件判断
+            </button>
+
+            <button class="btn btn-outline-info node-type-btn" data-node-type="Delay">
+                <i class="bi bi-clock"></i> 延迟等待
+            </button>
+
+            <button class="btn btn-outline-secondary node-type-btn" data-node-type="Script">
+                <i class="bi bi-code-slash"></i> 脚本执行
+            </button>
+
+            <button class="btn btn-outline-danger node-type-btn" data-node-type="EndNode">
+                <i class="bi bi-stop-circle"></i> 结束节点
+            </button>
+        </div>
+    </div>
+
+    <!-- 中间：工作流画布 -->
+    <div class="col-md-7">
+        <div id="workflow-canvas"></div>
+    </div>
+
+    <!-- 右侧：节点配置面板 -->
+    <div class="col-md-3">
+        <div class="config-panel">
+            <h5 class="mb-3">节点配置</h5>
+            <div id="nodeConfigForm">
+                <p class="text-muted text-center">请选择一个节点进行配置</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="workflowId" value="@(Model?.WorkflowId ?? Guid.Empty)">
+
+@section Scripts {
+    <!-- jsPlumb Community Edition -->
+    <script src="https://cdn.jsdelivr.net/npm/@jsplumb/browser-ui@5.13.0/js/jsplumb.browser-ui.min.js"></script>
+
+    <script>
+        let workflowData = {
+            workflowId: '@(Model?.WorkflowId ?? Guid.Empty)',
+            name: '@(Model?.Name ?? "")',
+            description: '@(Model?.Description ?? "")',
+            nodes: @Html.Raw(Model != null ? System.Text.Json.JsonSerializer.Serialize(Model.Nodes) : "[]"),
+            edges: @Html.Raw(Model != null ? System.Text.Json.JsonSerializer.Serialize(Model.Edges) : "[]")
+        };
+
+        let jsPlumbInstance;
+        let selectedNode = null;
+        let nodeCounter = 0;
+
+        $(document).ready(function () {
+            // 初始化jsPlumb
+            const { ready, newInstance } = jsPlumb;
+
+            ready(function () {
+                jsPlumbInstance = newInstance({
+                    container: document.getElementById('workflow-canvas'),
+                    connector: { type: 'Bezier', options: { curviness: 60 } },
+                    paintStyle: { stroke: '#0d6efd', strokeWidth: 2 },
+                    endpointStyle: { fill: '#0d6efd', radius: 5 },
+                    hoverPaintStyle: { stroke: '#ffc107', strokeWidth: 3 },
+                    connectionOverlays: [
+                        { type: 'Arrow', options: { location: 1, width: 10, length: 10 } }
+                    ]
+                });
+
+                // 加载现有工作流数据
+                if (workflowData.nodes && workflowData.nodes.length > 0) {
+                    loadWorkflow();
+                }
+
+                // 启用连接事件
+                jsPlumbInstance.bind('connection', function (info) {
+                    console.log('Connection created:', info);
+                });
+
+                jsPlumbInstance.bind('connectionDetached', function (info) {
+                    console.log('Connection removed:', info);
+                });
+            });
+
+            // 添加节点按钮点击事件
+            $('.node-type-btn').on('click', function () {
+                const nodeType = $(this).data('node-type');
+                addNode(nodeType);
+            });
+
+            // 保存工作流
+            $('#saveBtn').on('click', saveWorkflow);
+
+            // 保存为XML
+            $('#saveXmlBtn').on('click', function() {
+                const wfId = $('#workflowId').val();
+                if (wfId && wfId !== '@Guid.Empty') {
+                    $.ajax({
+                        url: '@Url.Action("SaveAsXml")/' + wfId,
+                        type: 'POST',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function (response) {
+                            if (response.success) {
+                                alert('XML文件已保存: ' + response.filePath);
+                            } else {
+                                alert('保存失败: ' + response.message);
+                            }
+                        }
+                    });
+                } else {
+                    alert('请先保存工作流');
+                }
+            });
+
+            // 验证工作流
+            $('#validateBtn').on('click', function() {
+                const wfId = $('#workflowId').val();
+                if (wfId && wfId !== '@Guid.Empty') {
+                    $.ajax({
+                        url: '@Url.Action("Validate")/' + wfId,
+                        type: 'POST',
+                        success: function (response) {
+                            if (response.success) {
+                                alert('工作流验证通过！');
+                            } else {
+                                alert('验证失败: ' + response.message);
+                            }
+                        }
+                    });
+                } else {
+                    alert('请先保存工作流');
+                }
+            });
+
+            // 清空画布
+            $('#clearBtn').on('click', function () {
+                if (confirm('确定要清空画布吗？')) {
+                    jsPlumbInstance.deleteEveryConnection();
+                    $('#workflow-canvas .workflow-node').remove();
+                    selectedNode = null;
+                    $('#nodeConfigForm').html('<p class="text-muted text-center">请选择一个节点进行配置</p>');
+                }
+            });
+        });
+
+        function addNode(nodeType) {
+            const nodeId = generateGuid();
+            const x = 100 + (nodeCounter % 5) * 180;
+            const y = 100 + Math.floor(nodeCounter / 5) * 120;
+            nodeCounter++;
+
+            const nodeClass = nodeType.toLowerCase() + '-node';
+            const nodeHtml = `
+                <div class="workflow-node ${nodeClass}" id="${nodeId}"
+                     data-node-type="${nodeType}"
+                     style="left: ${x}px; top: ${y}px;">
+                    <div class="node-header">${nodeType}</div>
+                    <div class="node-type">${getNodeTypeLabel(nodeType)}</div>
+                    <div class="node-actions">
+                        <button class="btn btn-sm btn-danger delete-node-btn" onclick="deleteNode('${nodeId}')">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            $('#workflow-canvas').append(nodeHtml);
+
+            const nodeElement = document.getElementById(nodeId);
+
+            // 使节点可拖拽
+            jsPlumbInstance.draggable(nodeElement);
+
+            // 添加端点（连接点）
+            jsPlumbInstance.addEndpoint(nodeElement, {
+                anchor: 'Top',
+                isSource: false,
+                isTarget: true,
+                maxConnections: -1
+            });
+
+            jsPlumbInstance.addEndpoint(nodeElement, {
+                anchor: 'Bottom',
+                isSource: true,
+                isTarget: false,
+                maxConnections: -1
+            });
+
+            // 节点点击事件
+            $(nodeElement).on('click', function (e) {
+                if (!$(e.target).hasClass('btn')) {
+                    selectNode(nodeId);
+                }
+            });
+        }
+
+        function selectNode(nodeId) {
+            $('.workflow-node').removeClass('selected');
+            $(`#${nodeId}`).addClass('selected');
+            selectedNode = nodeId;
+            showNodeConfig(nodeId);
+        }
+
+        function showNodeConfig(nodeId) {
+            const node = $(`#${nodeId}`);
+            const nodeType = node.data('node-type');
+
+            let configHtml = `
+                <h6>${getNodeTypeLabel(nodeType)}</h6>
+                <div class="mb-3">
+                    <label class="form-label">节点名称</label>
+                    <input type="text" class="form-control" id="nodeName"
+                           value="${node.find('.node-header').text()}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">节点描述</label>
+                    <textarea class="form-control" id="nodeDescription" rows="2"></textarea>
+                </div>
+            `;
+
+            // 根据节点类型添加特定配置
+            if (nodeType === 'HttpRequest') {
+                configHtml += `
+                    <div class="mb-3">
+                        <label class="form-label">HTTP URL</label>
+                        <input type="text" class="form-control" id="httpUrl" placeholder="https://api.example.com/endpoint">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">HTTP方法</label>
+                        <select class="form-select" id="httpMethod">
+                            <option>GET</option>
+                            <option selected>POST</option>
+                            <option>PUT</option>
+                            <option>DELETE</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">请求头 (JSON)</label>
+                        <textarea class="form-control" id="httpHeaders" rows="3">{}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">请求体</label>
+                        <textarea class="form-control" id="httpBody" rows="3"></textarea>
+                    </div>
+                `;
+            } else if (nodeType === 'Condition') {
+                configHtml += `
+                    <div class="mb-3">
+                        <label class="form-label">条件表达式</label>
+                        <input type="text" class="form-control" id="conditionExpression"
+                               placeholder="例如: response.status == 200">
+                    </div>
+                `;
+            } else if (nodeType === 'Delay') {
+                configHtml += `
+                    <div class="mb-3">
+                        <label class="form-label">延迟时间（秒）</label>
+                        <input type="number" class="form-control" id="delaySeconds" value="5">
+                    </div>
+                `;
+            }
+
+            configHtml += `
+                <button class="btn btn-primary w-100" onclick="applyNodeConfig('${nodeId}')">
+                    <i class="bi bi-check"></i> 应用配置
+                </button>
+            `;
+
+            $('#nodeConfigForm').html(configHtml);
+        }
+
+        function applyNodeConfig(nodeId) {
+            const nodeName = $('#nodeName').val();
+            $(`#${nodeId} .node-header`).text(nodeName || 'Unnamed');
+            alert('节点配置已更新');
+        }
+
+        function deleteNode(nodeId) {
+            if (confirm('确定要删除这个节点吗？')) {
+                jsPlumbInstance.remove(nodeId);
+                if (selectedNode === nodeId) {
+                    selectedNode = null;
+                    $('#nodeConfigForm').html('<p class="text-muted text-center">请选择一个节点进行配置</p>');
+                }
+            }
+        }
+
+        function loadWorkflow() {
+            // 加载节点
+            workflowData.nodes.forEach(node => {
+                const nodeClass = node.nodeType.toLowerCase() + '-node';
+                const nodeHtml = `
+                    <div class="workflow-node ${nodeClass}" id="${node.nodeId}"
+                         data-node-type="${node.nodeType}"
+                         style="left: ${node.positionX}px; top: ${node.positionY}px;">
+                        <div class="node-header">${node.name}</div>
+                        <div class="node-type">${getNodeTypeLabel(node.nodeType)}</div>
+                        <div class="node-actions">
+                            <button class="btn btn-sm btn-danger delete-node-btn" onclick="deleteNode('${node.nodeId}')">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                $('#workflow-canvas').append(nodeHtml);
+                const nodeElement = document.getElementById(node.nodeId);
+                jsPlumbInstance.draggable(nodeElement);
+
+                jsPlumbInstance.addEndpoint(nodeElement, {
+                    anchor: 'Top',
+                    isSource: false,
+                    isTarget: true,
+                    maxConnections: -1
+                });
+
+                jsPlumbInstance.addEndpoint(nodeElement, {
+                    anchor: 'Bottom',
+                    isSource: true,
+                    isTarget: false,
+                    maxConnections: -1
+                });
+
+                $(nodeElement).on('click', function (e) {
+                    if (!$(e.target).hasClass('btn')) {
+                        selectNode(node.nodeId);
+                    }
+                });
+            });
+
+            // 加载边（连接）
+            workflowData.edges.forEach(edge => {
+                jsPlumbInstance.connect({
+                    source: edge.sourceNodeId,
+                    target: edge.targetNodeId
+                });
+            });
+        }
+
+        function saveWorkflow() {
+            const name = $('#workflowName').val();
+            const description = $('#workflowDescription').val();
+
+            if (!name) {
+                alert('请输入工作流名称');
+                return;
+            }
+
+            // 收集节点数据
+            const nodes = [];
+            $('.workflow-node').each(function () {
+                const $node = $(this);
+                const position = $node.position();
+                nodes.push({
+                    nodeId: $node.attr('id'),
+                    workflowId: $('#workflowId').val() || '@Guid.Empty',
+                    nodeType: $node.data('node-type'),
+                    name: $node.find('.node-header').text(),
+                    description: '',
+                    configuration: '{}',
+                    positionX: position.left,
+                    positionY: position.top,
+                    styleConfig: null
+                });
+            });
+
+            // 收集边数据
+            const edges = [];
+            const connections = jsPlumbInstance.getAllConnections();
+            connections.forEach(conn => {
+                edges.push({
+                    edgeId: generateGuid(),
+                    workflowId: $('#workflowId').val() || '@Guid.Empty',
+                    sourceNodeId: conn.source.id,
+                    targetNodeId: conn.target.id,
+                    label: '',
+                    condition: '',
+                    priority: 0,
+                    styleConfig: null
+                });
+            });
+
+            const workflow = {
+                workflowId: $('#workflowId').val() || '@Guid.Empty',
+                name: name,
+                description: description,
+                nodes: nodes,
+                edges: edges,
+                isActive: true,
+                version: 1
+            };
+
+            const isEdit = workflow.workflowId !== '@Guid.Empty';
+            const url = isEdit ? '@Url.Action("Update")' : '@Url.Action("Create")';
+
+            $.ajax({
+                url: url,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(workflow),
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function (response) {
+                    if (response.success) {
+                        alert('工作流保存成功！');
+                        if (!isEdit && response.workflowId) {
+                            $('#workflowId').val(response.workflowId);
+                            window.location.href = '@Url.Action("Editor")?id=' + response.workflowId;
+                        }
+                    } else {
+                        alert('保存失败: ' + response.message);
+                    }
+                },
+                error: function (xhr) {
+                    alert('保存失败: ' + xhr.responseText);
+                }
+            });
+        }
+
+        function getNodeTypeLabel(nodeType) {
+            const labels = {
+                'StartNode': '开始',
+                'EndNode': '结束',
+                'HttpRequest': 'HTTP请求',
+                'Condition': '条件判断',
+                'Delay': '延迟',
+                'Script': '脚本'
+            };
+            return labels[nodeType] || nodeType;
+        }
+
+        function generateGuid() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+    </script>
+}
