@@ -164,18 +164,15 @@
 
 <input type="hidden" id="customJobId" value="@Model?.CustomJobId" />
 
+
 @section Styles {
     <link rel="stylesheet" href="~/css/workflow-editor.css" />
+    <link href="~/lib/logicflow/index.min.css" rel="stylesheet" />
+    <link href="~/lib/logicflow/extension/index.min.css" rel="stylesheet" />
 }
 
-@section Scripts {
-    <!-- LogicFlow 核心库 -->
-    <script src="https://cdn.jsdelivr.net/npm/@logicflow/core@2.0.0/dist/index.umd.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@logicflow/core@2.0.0/dist/index.css">
+@section Scripts {    
+    <script src="~/lib/logicflow/extension/index.min.js" defer></script>
 
-    <!-- LogicFlow 扩展插件 -->
-    <script src="https://cdn.jsdelivr.net/npm/@logicflow/extension@2.0.0/dist/index.umd.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@logicflow/extension@2.0.0/dist/index.css">
-
-    <script src="~/js/workflow-editor.js"></script>
+    <script src="~/js/workflow-editor.js" defer></script>
 }

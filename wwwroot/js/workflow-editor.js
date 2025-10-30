@@ -1,15 +1,18 @@
 // 基于 LogicFlow v2 的工作流编辑器 - 使用全局变量方式
 // 需要在HTML中先引入LogicFlow的CDN脚本
 
+// 兼容 shim：一些 logicflow 构建会导出为 Core 或 default，确保全局有 LogicFlow 变量
+const { LogicFlow, RectNode, RectNodeModel, PolygonNode, PolygonNodeModel,h } = window.Core;
+
 // 自定义节点类
-class WorkflowNode extends LogicFlow.RectNode {
+class BaseModel extends RectNodeModel { }
+class WorkflowNode extends RectNode {
     getShape() {
         const { model } = this.props;
         const { x, y, width, height } = model;
-        const properties = model.properties;
-
-        return LogicFlow.h('g', {}, [
-            LogicFlow.h('rect', {
+        const properties = model.properties || {};
+        return h('g', {}, [
+            h('rect', {
                 x: x - width / 2,
                 y: y - height / 2,
                 rx: 8,
@@ -20,21 +23,21 @@ class WorkflowNode extends LogicFlow.RectNode {
                 stroke: '#333',
                 strokeWidth: 2
             }),
-            LogicFlow.h('text', {
+            h('text', {
                 fill: '#fff',
                 fontSize: 32,
                 textAnchor: 'middle',
                 x,
                 y: y - 5
             }, properties.icon || ''),
-            LogicFlow.h('text', {
+            h('text', {
                 fill: '#fff',
                 fontSize: 12,
                 textAnchor: 'middle',
                 x,
                 y: y + 25
             }, properties.label || '')
-        ]);
+        ]);    
     }
 }
 
@@ -42,34 +45,43 @@ class WorkflowNode extends LogicFlow.RectNode {
 class StartNode extends WorkflowNode {
     static extendKey = 'start';
 }
+class StartModel extends BaseModel {
+   
+}
 
 // 触发器节点
 class TriggerNode extends WorkflowNode {
     static extendKey = 'trigger';
 }
-
+class TriggerModel extends BaseModel {  }
 // 事件节点
 class EventNode extends WorkflowNode {
     static extendKey = 'event';
 }
+class EventModel extends BaseModel {  }
 
 // HTTP授权节点
 class HttpAuthNode extends WorkflowNode {
     static extendKey = 'httpAuth';
 }
+class HttpAuthModel extends BaseModel { }
 
+class HttpActionModel extends BaseModel {  }
 // HTTP处理节点
+
 class HttpActionNode extends WorkflowNode {
     static extendKey = 'httpAction';
 }
 
+class CommandLineModel extends BaseModel {  }
 // 命令行节点
 class CommandLineNode extends WorkflowNode {
     static extendKey = 'commandLine';
 }
 
+class EndModel extends BaseModel {  }
 // 条件判断节点（菱形）
-class ConditionNode extends LogicFlow.PolygonNode {
+class ConditionNode extends PolygonNode {
     static extendKey = 'condition';
 
     getShape() {
@@ -84,14 +96,14 @@ class ConditionNode extends LogicFlow.PolygonNode {
             [x - width / 2, y]
         ];
 
-        return LogicFlow.h('g', {}, [
-            LogicFlow.h('polygon', {
+        return h('g', {}, [
+            h('polygon', {
                 points: points.map(p => p.join(',')).join(' '),
                 fill: '#fd7e14',
                 stroke: '#333',
                 strokeWidth: 2
             }),
-            LogicFlow.h('text', {
+            h('text', {
                 fill: '#fff',
                 fontSize: 28,
                 textAnchor: 'middle',
@@ -101,6 +113,8 @@ class ConditionNode extends LogicFlow.PolygonNode {
         ]);
     }
 }
+
+class ConditionModel extends (PolygonNodeModel || RectNodeModel) {  }
 
 // 结束节点
 class EndNode extends WorkflowNode {
@@ -136,7 +150,52 @@ class WorkflowEditor {
         this.initEvents();
         this.loadWorkflow();
     }
+    clientToGraphPoint(clientX, clientY) {
+        // 优先使用 SVG 的 createSVGPoint + getScreenCTM 反变换（准确）
+        try {
+            const container = this.lf && (this.lf.container || (this.lf.getGraphDom && this.lf.getGraphDom()));
+            if (container) {
+                const svg = container.querySelector && container.querySelector('svg');
+                if (svg && typeof svg.createSVGPoint === 'function') {
+                    const pt = svg.createSVGPoint();
+                    pt.x = clientX;
+                    pt.y = clientY;
+                    const ctm = svg.getScreenCTM && svg.getScreenCTM();
+                    if (ctm) {
+                        const inv = ctm.inverse();
+                        const p = pt.matrixTransform(inv);
+                        return { x: p.x, y: p.y };
+                    }
+                }
 
+                // 如果没有 SVG，退回到容器坐标并尝试考虑 LogicFlow 的 transform/zoom
+                const rect = container.getBoundingClientRect();
+                let x = clientX - rect.left;
+                let y = clientY - rect.top;
+
+                // 尝试读取 lf 的 transform / zoom 信息
+                let scale = 1, tx = 0, ty = 0;
+                try {
+                    const t = (this.lf && (this.lf.getTransform ? this.lf.getTransform() : (this.lf.graphModel && this.lf.graphModel.transform)));
+                    if (t) {
+                        scale = t.SCALE_X || t.scaleX || t.scale || 1;
+                        tx = t.TRANSLATE_X || t.translateX || t.tx || 0;
+                        ty = t.TRANSLATE_Y || t.translateY || t.ty || 0;
+                    } else if (this.lf && typeof this.lf.getZoom === 'function') {
+                        scale = this.lf.getZoom() || 1;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+
+                // 将容器坐标转换为图坐标（考虑平移和缩放）
+                return { x: (x - tx) / scale, y: (y - ty) / scale };
+            }
+        } catch (e) {
+            console.warn('clientToGraphPoint 失败，退回使用 client 坐标：', e);
+        }
+        return { x: clientX, y: clientY };
+    }
     initLogicFlow() {
         const container = document.getElementById('workflowCanvas');
         if (!container) {
@@ -198,14 +257,18 @@ class WorkflowEditor {
         });
 
         // 注册自定义节点
-        this.lf.register(StartNode);
-        this.lf.register(TriggerNode);
-        this.lf.register(EventNode);
-        this.lf.register(HttpAuthNode);
-        this.lf.register(HttpActionNode);
-        this.lf.register(CommandLineNode);
-        this.lf.register(ConditionNode);
-        this.lf.register(EndNode);
+        try {
+            this.lf.register({ type: 'start', model: StartModel, view: StartNode });
+            this.lf.register({ type: 'trigger', model: TriggerModel, view: TriggerNode });
+            this.lf.register({ type: 'event', model: EventModel, view: EventNode });
+            this.lf.register({ type: 'httpAuth', model: HttpAuthModel, view: HttpAuthNode });
+            this.lf.register({ type: 'httpAction', model: HttpActionModel, view: HttpActionNode });
+            this.lf.register({ type: 'commandLine', model: CommandLineModel, view: CommandLineNode });
+            this.lf.register({ type: 'condition', model: ConditionModel, view: ConditionNode });
+            this.lf.register({ type: 'end', model: EndModel, view: EndNode });
+        } catch (err) {
+            console.error('注册自定义节点失败：', err);
+        }
 
         // 设置默认边类型为贝塞尔曲线
         this.lf.setDefaultEdgeType('polyline');
@@ -289,9 +352,25 @@ class WorkflowEditor {
             centerPanel.addEventListener('drop', (e) => {
                 e.preventDefault();
                 const nodeType = e.dataTransfer.getData('nodeType');
-                if (nodeType && this.lf) {
-                    const point = this.lf.getPointByClient(e.clientX, e.clientY);
-                    this.createNode(nodeType, point.x, point.y);
+                if (!nodeType || !this.lf) return;
+
+                // 计算图坐标
+                let pt = null;
+                try {
+                    pt = this.clientToGraphPoint(e.clientX, e.clientY);
+                } catch (err) {
+                    console.warn('计算图坐标失败，使用容器相对坐标：', err);
+                }
+
+                if (!pt) {
+                    const rect = (this.lf && this.lf.container) ? this.lf.container.getBoundingClientRect() : document.getElementById('workflowCanvas').getBoundingClientRect();
+                    pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                }
+
+                try {
+                    this.createNode(nodeType, pt.x, pt.y);
+                } catch (err) {
+                    console.error('drop 创建节点失败：', err);
                 }
             });
         }
@@ -703,20 +782,20 @@ class WorkflowEditor {
             },
             body: JSON.stringify(workflowData)
         })
-        .then(response => {
-            if (!response.ok) throw new Error('保存失败');
-            return response.json();
-        })
-        .then(data => {
-            alert('工作流保存成功！');
-            if (!customJobId || customJobId === '00000000-0000-0000-0000-000000000000') {
-                window.location.href = `/CustomJobs/WorkflowEditor/${data.customJobId}`;
-            }
-        })
-        .catch(error => {
-            console.error('保存错误:', error);
-            alert('保存失败: ' + error.message);
-        });
+            .then(response => {
+                if (!response.ok) throw new Error('保存失败');
+                return response.json();
+            })
+            .then(data => {
+                alert('工作流保存成功！');
+                if (!customJobId || customJobId === '00000000-0000-0000-0000-000000000000') {
+                    window.location.href = `/CustomJobs/WorkflowEditor/${data.customJobId}`;
+                }
+            })
+            .catch(error => {
+                console.error('保存错误:', error);
+                alert('保存失败: ' + error.message);
+            });
     }
 
     loadWorkflow() {
@@ -800,3 +879,4 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('LogicFlow 未加载，请检查脚本引用');
     }
 });
+
