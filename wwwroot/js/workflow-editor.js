@@ -141,6 +141,7 @@ class WorkflowEditor {
         this.canvas.on('selection:updated', (e) => this.onNodeSelected(e));
         this.canvas.on('selection:cleared', () => this.onNodeDeselected());
         this.canvas.on('mouse:down', (e) => this.onCanvasMouseDown(e));
+        this.canvas.on('mouse:move', (e) => this.onCanvasMouseMove(e));
     }
 
     setMode(mode) {
@@ -350,18 +351,82 @@ class WorkflowEditor {
         }
     }
 
-    findPortAtPosition(node, pointer) {
-        const objects = node.getObjects();
-        for (let obj of objects) {
-            if (obj.portType) {
-                const bounds = obj.getBoundingRect(true);
-                if (pointer.x >= bounds.left && pointer.x <= bounds.left + bounds.width &&
-                    pointer.y >= bounds.top && pointer.y <= bounds.top + bounds.height) {
-                    return obj;
-                }
-            }
+    onCanvasMouseMove(e) {
+        if (this.currentMode !== 'connect') return;
+
+        const target = e.target;
+        if (!target || !target.nodeId) {
+            // 不在节点上，恢复默认光标
+            this.canvas.defaultCursor = 'crosshair';
+            this.canvas.hoverCursor = 'crosshair';
+            return;
         }
-        return null;
+
+        // 检查鼠标是否在连接区域
+        const pointer = this.canvas.getPointer(e.e);
+        const port = this.findPortAtPosition(target, pointer);
+
+        if (port) {
+            // 在连接区域，显示指针光标表示可以点击
+            this.canvas.hoverCursor = 'pointer';
+        } else {
+            // 不在连接区域，显示默认连接光标
+            this.canvas.hoverCursor = 'crosshair';
+        }
+    }
+
+    findPortAtPosition(node, pointer) {
+        // 获取节点的中心点和边界
+        const center = node.getCenterPoint();
+        const nodeWidth = 120;
+        const nodeHeight = 100;
+        const halfWidth = nodeWidth / 2;
+        const halfHeight = nodeHeight / 2;
+
+        // 计算节点的边界
+        const nodeLeft = center.x - halfWidth;
+        const nodeRight = center.x + halfWidth;
+        const nodeTop = center.y - halfHeight;
+        const nodeBottom = center.y + halfHeight;
+
+        // 检查鼠标是否在节点范围内
+        if (pointer.x < nodeLeft || pointer.x > nodeRight ||
+            pointer.y < nodeTop || pointer.y > nodeBottom) {
+            return null;
+        }
+
+        // 获取节点的端口对象
+        const objects = node.getObjects();
+        const ports = objects.filter(obj => obj.portType);
+
+        // 判断鼠标在节点的左半部分还是右半部分
+        const isRightHalf = pointer.x > center.x;
+
+        if (isRightHalf) {
+            // 右半部分 - 查找输出端口
+            const outputPorts = ports.filter(p => p.portType === 'output');
+
+            if (outputPorts.length === 0) {
+                return null;
+            }
+
+            if (outputPorts.length === 1) {
+                // 单个输出端口（普通节点）
+                return outputPorts[0];
+            } else {
+                // 两个输出端口（条件节点）- 平分右半部分的上下区域
+                const isTopHalf = pointer.y < center.y;
+                // true端口在上半部分，false端口在下半部分
+                return outputPorts.find(p =>
+                    (isTopHalf && p.portName === 'true') ||
+                    (!isTopHalf && p.portName === 'false')
+                );
+            }
+        } else {
+            // 左半部分 - 查找输入端口
+            const inputPort = ports.find(p => p.portType === 'input');
+            return inputPort || null;
+        }
     }
 
     createConnection(sourceNode, targetNode, sourcePort = 'default') {
